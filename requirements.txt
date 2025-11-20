@@ -1,0 +1,12 @@
+streamlit
+pandas
+numpy
+plotly
+graphviz
+reportlab
+matplotlib
+fpdf
+kaleido
+scipy
+
+
