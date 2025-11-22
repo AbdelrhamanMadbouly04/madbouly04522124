@@ -456,4 +456,3 @@ def generate_pdf_report(results):
 
 if __name__ == "__main__":
     main()
-ذ
