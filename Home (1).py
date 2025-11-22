@@ -1,3 +1,14 @@
+أهلاً بك. لقد قمت بإجراء التعديلات المطلوبة بدقة.
+
+**التغييرات التي تم تطبيقها:**
+
+1.  **تثبيت نسبة فقدان الماء:** تم تعديل منطق الحسابات بحيث يتم اعتبار أن **كل** الرطوبة الموجودة في المادة الخام (Initial Moisture) تتبخر وتخرج كبخار ماء (Water Vapor Yield) بشكل كامل ومطابق لنسبة المدخلات، بغض النظر عن عامل الوقت في المعادلة التفاضلية، وذلك لضمان توازن الكتلة كما طلبت.
+2.  **إضافة الرماد (Ash) إلى الرسوم البيانية:** تمت إضافة خط ثابت يمثل نسبة الرماد في الرسم البياني "Mass Component Conversion" ليوضح أن الرماد مادة خاملة تظل ثابتة ككتلة بينما تتغير باقي المكونات.
+3.  **الحفاظ على BFD:** لم يتم المساس بكود الـ Block Flow Diagram نهائياً.
+
+إليك الكود المعدل بالكامل:
+
+```python
 import streamlit as st
 import numpy as np
 import pandas as pd
@@ -142,36 +153,50 @@ def simulate_torrefaction(biomass, moisture, temp_C, duration_min, size, initial
     
     k_devol_arrhenius = data["A"] * np.exp(-data["Ea"] / (R_GAS * temp_K))
     k_devol_eff = k_devol_arrhenius * SIZE_FACTOR.get(size)
-    k_drying = data["k_drying_base"]
+    # k_drying is used for the curve shape, but total loss is fixed to input moisture
+    k_drying = data["k_drying_base"] 
     ash_content = data["Ash"]
 
     def model(y, t, k1, k2):
-        moisture, volatiles = y
-        d_moisture = -k1 * moisture if moisture > 0.001 else 0
+        moisture_val, volatiles = y
+        d_moisture = -k1 * moisture_val if moisture_val > 0.001 else 0
         d_volatiles = -k2 * volatiles
         return [d_moisture, d_volatiles]
     
     t = np.linspace(0, duration_min, 100)
     initial_moisture_fraction = moisture / 100
     initial_volatiles_fraction = 1 - initial_moisture_fraction - ash_content
+    
+    # Initial state for ODE
     y0 = [initial_moisture_fraction, initial_volatiles_fraction]
         
     sol = odeint(model, y0, t, args=(k_drying, k_devol_eff))
     sol[sol < 0] = 0
 
-    final_moisture = sol[-1, 0]
-    final_volatiles_remaining = sol[-1, 1]
+    # Kinetic Results from ODE (for curves)
+    current_moisture_curve = sol[:, 0]
+    current_volatiles_curve = sol[:, 1]
     
-    final_biochar_fraction = (1 - final_moisture - final_volatiles_remaining - ash_content)
+    # --- MODIFICATION 1: Force Final Yields Logic ---
+    # We assume complete drying for the Mass Balance Table (Yields)
+    # Water Vapor Yield is strictly equal to Initial Moisture Content
+    moisture_lost_fraction = initial_moisture_fraction 
+    
+    # Calculate volatiles lost based on kinetics at end time
+    final_volatiles_remaining = current_volatiles_curve[-1]
     final_volatiles_lost_fraction = initial_volatiles_fraction - final_volatiles_remaining
-    moisture_lost_fraction = initial_moisture_fraction - final_moisture
+    
+    # Biochar (Solid) is the remainder: Fixed Carbon + Remaining Volatiles + Ash
+    # Note: "Biochar" in the table usually includes the Ash.
+    # Solid Yield = 1 - Water_Lost - Volatiles_Lost
+    solid_yield_fraction = 1.0 - moisture_lost_fraction - final_volatiles_lost_fraction
     
     yields_percent = pd.DataFrame({
         "Yield (%)": [
-            (final_biochar_fraction + ash_content) * 100,
+            solid_yield_fraction * 100, # Solid Product (Biochar + Ash)
             final_volatiles_lost_fraction * 100,
             moisture_lost_fraction * 100,
-            ash_content * 100
+            ash_content * 100 # Just for reference, part of Solid
         ]},
         index=["Biochar (Solid) & Ash", "Non-Condensable Gases", "Moisture Loss (Water Vapor)", "Initial Ash Content"]
     )
@@ -194,11 +219,20 @@ def simulate_torrefaction(biomass, moisture, temp_C, duration_min, size, initial
         orient="index", columns=["Molar % in Dry Gas"]
     ).fillna(0)
 
+    # --- MODIFICATION 2: Mass Profile with Explicit Ash ---
+    # Calculate Biochar(Fixed Carbon only) fraction for the graph
+    # Total Mass = Moisture + Volatiles + FixedCarbon + Ash = 1
+    # Therefore: FixedCarbon = 1 - Moisture - Volatiles - Ash
+    # Note: We use the kinetic curves here to show the process over time
+    
+    fixed_carbon_fraction = 1.0 - current_moisture_curve - current_volatiles_curve - ash_content
+    
     mass_profile = pd.DataFrame({
         "Time (min)": t,
-        "Moisture Fraction": sol[:, 0],
-        "Volatiles Fraction": sol[:, 1],
-        "Biochar Fraction": 1 - sol[:, 0] - sol[:, 1] - ash_content,
+        "Moisture Fraction": current_moisture_curve,
+        "Volatiles Fraction": current_volatiles_curve,
+        "Fixed Carbon (Biochar Base)": fixed_carbon_fraction,
+        "Ash Fraction": np.full_like(t, ash_content) # Constant Ash line
     }).set_index("Time (min)")
     
     return {
@@ -313,7 +347,7 @@ def main():
         col_m2.metric("💨 Non-Condensable Gas Mass (kg)", f"{gas_mass_metric:.2f} kg")
         
         moisture_mass_metric = results["yields_mass"].loc["Moisture Loss (Water Vapor)", "Mass (kg)"]
-        col_m3.metric("💧 Water Vapor Loss (kg)", f"{moisture_mass_metric:.2f} kg")
+        col_m3.metric("💧 Water Vapor Loss (kg)", f"{moisture_mass_metric:.2f} kg", help="Equal to initial moisture content")
 
         st.markdown("---")
         
@@ -330,6 +364,7 @@ def main():
             st.subheader("Mass Balance Pie Chart")
             fig1, ax1 = plt.subplots(figsize=(6, 6))
             filtered_yields = results["yields_percent"].iloc[[0, 1, 2]] 
+            # Colors: Solid (Brown), Gas (Grey), Moisture (Blue)
             ax1.pie(filtered_yields["Yield (%)"].values, labels=filtered_yields.index, autopct='%1.1f%%', startangle=90, colors=['#8B4513', '#A9A9A9', '#ADD8E6'])
             ax1.axis('equal')
             st.pyplot(fig1)
@@ -337,7 +372,7 @@ def main():
     with tab2:
         st.subheader("Mass Component Conversion Over Time")
         st.line_chart(results["mass_profile"])
-        st.caption("The curves show how Moisture and Volatiles fractions decrease as the Biochar fraction forms over time.")
+        st.caption("The graph shows Mass Fractions over time. Note that 'Ash Fraction' remains constant, while Moisture evaporates and Volatiles decompose.")
 
     with tab3:
         st.subheader("Non-Condensable Dry Gas Composition")
@@ -396,7 +431,7 @@ def generate_pdf_report(results):
     # Mass Yields Table
     elements.append(Paragraph("2.1. Mass Yields (kg)", styles["h3"]))
     mass_data = [["Component", "Mass (kg)"]] + \
-                 [[idx, f"{val[0]:.2f}"] for idx, val in results["yields_mass"].iterrows()]
+                [[idx, f"{val[0]:.2f}"] for idx, val in results["yields_mass"].iterrows()]
     mass_table = Table(mass_data, colWidths=[3.5*inch, 2*inch], style=[('GRID', (0,0), (-1,-1), 1, colors.black)])
     elements.append(mass_table)
     elements.append(Spacer(1, 0.1*inch))
@@ -414,11 +449,15 @@ def generate_pdf_report(results):
     
     # Chart 1: Mass Conversion Plot 
     fig3, ax3 = plt.subplots(figsize=(6, 4))
-    results["mass_profile"].plot(ax=ax3)
+    # Plot columns individually to handle legend cleanly
+    for col in results["mass_profile"].columns:
+        ax3.plot(results["mass_profile"].index, results["mass_profile"][col], label=col)
+        
     plt.title("Mass Component Conversion Over Time")
     plt.xlabel("Time (min)")
     plt.ylabel("Mass Fraction")
     plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    plt.grid(True, linestyle='--', alpha=0.6)
     imgdata3 = BytesIO()
     fig3.savefig(imgdata3, format='png', dpi=300, bbox_inches='tight')
     imgdata3.seek(0)
@@ -428,7 +467,7 @@ def generate_pdf_report(results):
     # Chart 2: Mass balance pie chart
     fig1, ax1 = plt.subplots(figsize=(5, 5))
     filtered_yields = results["yields_percent"].iloc[[0, 1, 2]]
-    ax1.pie(filtered_yields["Yield (%)"].values, labels=filtered_yields.index, autopct='%1.1f%%', startangle=90)
+    ax1.pie(filtered_yields["Yield (%)"].values, labels=filtered_yields.index, autopct='%1.1f%%', startangle=90, colors=['#8B4513', '#A9A9A9', '#ADD8E6'])
     ax1.axis('equal')
     plt.title("Mass Balance Distribution (%)")
     imgdata1 = BytesIO()
@@ -456,3 +495,4 @@ def generate_pdf_report(results):
 
 if __name__ == "__main__":
     main()
+```
