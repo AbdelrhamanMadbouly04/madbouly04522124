@@ -2,7 +2,7 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go # For the advanced Dual-Axis chart
+import plotly.graph_objects as go
 from scipy.integrate import odeint
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as ReportImage, Table
@@ -293,7 +293,7 @@ def main():
     with tab2:
         st.subheader("Ash Concentration & Mass Depletion Kinetics")
         
-        # --- UPGRADED DUAL-AXIS CHART (Plotly Go) ---
+        # --- FIXED DUAL-AXIS CHART (Strict Syntax for Streamlit Cloud) ---
         fig_dual = go.Figure()
 
         # Line 1: Total Mass (Left Axis)
@@ -314,19 +314,32 @@ def main():
             yaxis="y2"
         ))
 
-        # Layout Logic
+        # Corrected Layout Logic (Using nested dicts for fonts to prevent ValueError)
         fig_dual.update_layout(
             title="Dynamic Ash Enrichment Logic",
             xaxis=dict(title="Time (min)"),
-            yaxis=dict(title="Total Mass Remaining (%)", titlefont=dict(color="#4CAF50"), tickfont=dict(color="#4CAF50")),
-            yaxis2=dict(title="Ash Concentration (%)", titlefont=dict(color="#FF5252"), tickfont=dict(color="#FF5252"), overlaying="y", side="right"),
+            
+            # Left Axis (Primary)
+            yaxis=dict(
+                title=dict(text="Total Mass Remaining (%)", font=dict(color="#4CAF50")),
+                tickfont=dict(color="#4CAF50")
+            ),
+            
+            # Right Axis (Secondary)
+            yaxis2=dict(
+                title=dict(text="Ash Concentration (%)", font=dict(color="#FF5252")),
+                tickfont=dict(color="#FF5252"),
+                overlaying="y",
+                side="right"
+            ),
+            
             legend=dict(x=0.1, y=1.1, orientation="h"),
             hovermode="x unified",
             paper_bgcolor='rgba(0,0,0,0)', # Transparent
             plot_bgcolor='rgba(0,0,0,0)',
             height=450
         )
-        # Add grid only for primary axis to avoid clutter
+        # Add grid only for primary axis
         fig_dual.update_yaxes(showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)', secondary_y=False)
         fig_dual.update_yaxes(showgrid=False, secondary_y=True)
         fig_dual.update_xaxes(showgrid=False)
