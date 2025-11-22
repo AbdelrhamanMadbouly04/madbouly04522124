@@ -36,83 +36,151 @@ SIZE_FACTOR = {
 
 # --- 2. Simulation Function (simulate_torrefaction) ---
 def simulate_torrefaction(biomass, moisture, temp_C, duration_min, size, initial_mass_kg):
-    """Core torrefaction simulation logic using Arrhenius and particle size correction."""
+    """Core torrefaction simulation logic using Arrhenius and particle size correction.
+    Revised to enforce physical constraints: moisture cannot go below zero (hard stop),
+    no negative fractions, and mass balance enforced at the end."""
     temp_K = temp_C + 273.15
     data = EMPIRICAL_DATA.get(biomass)
     
+    # kinetic constants
     k_devol_arrhenius = data["A"] * np.exp(-data["Ea"] / (R_GAS * temp_K))
-    k_devol_eff = k_devol_arrhenius * SIZE_FACTOR.get(size)
+    k_devol_eff = k_devol_arrhenius * SIZE_FACTOR.get(size, 1.0)
     k_drying = data["k_drying_base"]
     ash_content = data["Ash"]
 
-    def model(y, t, k1, k2):
-        moisture, volatiles = y
-        d_moisture = -k1 * moisture if moisture > 0.001 else 0
-        d_volatiles = -k2 * volatiles
-        return [d_moisture, d_volatiles]
-    
-    t = np.linspace(0, duration_min, 100)
-    initial_moisture_fraction = moisture / 100
-    initial_volatiles_fraction = 1 - initial_moisture_fraction - ash_content
-    y0 = [initial_moisture_fraction, initial_volatiles_fraction]
-        
-    sol = odeint(model, y0, t, args=(k_drying, k_devol_eff))
-    sol[sol < 0] = 0
+    # safe guards for initial fractions
+    initial_moisture_fraction = float(np.clip(moisture / 100.0, 0.0, 0.999))
+    initial_volatiles_fraction = 1.0 - initial_moisture_fraction - ash_content
+    if initial_volatiles_fraction < 0:
+        # if ash + moisture exceed 1, renormalize moisture (keep ash fixed)
+        initial_moisture_fraction = max(0.0, 1.0 - ash_content - 1e-6)
+        initial_volatiles_fraction = 1.0 - initial_moisture_fraction - ash_content
 
-    final_moisture = sol[-1, 0]
-    final_volatiles_remaining = sol[-1, 1]
-    
-    final_biochar_fraction = (1 - final_moisture - final_volatiles_remaining - ash_content)
-    final_volatiles_lost_fraction = initial_volatiles_fraction - final_volatiles_remaining
-    moisture_lost_fraction = initial_moisture_fraction - final_moisture
-    
+    # ODE system: drying + devolatilization
+    def model(y, t, k1, k2):
+        m, v = y
+        # hard stop behaviour: when moisture nearly zero, no further drying
+        if m <= 0.0:
+            d_m = 0.0
+        else:
+            d_m = -k1 * m
+            # don't allow step to overshoot too far negative (helps numeric)
+            if m + d_m * 1.0 < -1e-9:
+                d_m = -m / 1.0  # conservative step, will be clipped later
+
+        d_v = -k2 * v if v > 0.0 else 0.0
+        return [d_m, d_v]
+
+    # time vector (minutes)
+    t = np.linspace(0, duration_min, 200)
+    y0 = [initial_moisture_fraction, initial_volatiles_fraction]
+    sol = odeint(model, y0, t, args=(k_drying, k_devol_eff))
+    # clip small negatives from numerical solver
+    sol[:, 0] = np.clip(sol[:, 0], 0.0, 1.0)
+    sol[:, 1] = np.clip(sol[:, 1], 0.0, 1.0)
+
+    # enforce monotonic non-increase of moisture (physically drying only)
+    # (optional but helps avoid numerical wiggles)
+    moisture_profile = np.minimum.accumulate(sol[:, 0])
+
+    # recompute biochar profile and clip
+    biochar_profile = 1.0 - moisture_profile - sol[:, 1] - ash_content
+    biochar_profile = np.clip(biochar_profile, 0.0, 1.0)
+
+    # final steady-state at end of process
+    final_moisture = float(np.clip(moisture_profile[-1], 0.0, 1.0))
+    final_volatiles_remaining = float(np.clip(sol[-1, 1], 0.0, 1.0))
+
+    # enforce mass-balance: ash is fixed, ensure sum = 1
+    final_biochar_fraction = 1.0 - ash_content - final_moisture - final_volatiles_remaining
+    if final_biochar_fraction < 0:
+        # if negative due to numerical or unrealistic inputs, set biochar=0 and
+        # reassign what's left to volatiles_remaining (can't change ash)
+        final_biochar_fraction = 0.0
+        final_volatiles_remaining = 1.0 - ash_content - final_moisture
+        final_volatiles_remaining = max(final_volatiles_remaining, 0.0)
+
+    # clip again to be safe
+    final_biochar_fraction = float(np.clip(final_biochar_fraction, 0.0, 1.0))
+    final_volatiles_remaining = float(np.clip(final_volatiles_remaining, 0.0, 1.0))
+
+    # compute lost fractions (bounded)
+    initial_volatiles_fraction = float(initial_volatiles_fraction)
+    final_volatiles_lost_fraction = float(np.clip(initial_volatiles_fraction - final_volatiles_remaining, 0.0, initial_volatiles_fraction))
+    moisture_lost_fraction = float(np.clip(initial_moisture_fraction - final_moisture, 0.0, initial_moisture_fraction))
+
+    # Build yields (percent & mass)
     yields_percent = pd.DataFrame({
         "Yield (%)": [
-            (final_biochar_fraction + ash_content) * 100,
-            final_volatiles_lost_fraction * 100,
-            moisture_lost_fraction * 100,
-            ash_content * 100
+            (final_biochar_fraction + ash_content) * 100.0,
+            final_volatiles_lost_fraction * 100.0,
+            moisture_lost_fraction * 100.0,
+            ash_content * 100.0
         ]},
         index=["Biochar (Solid) & Ash", "Non-Condensable Gases", "Moisture Loss (Water Vapor)", "Initial Ash Content"]
     )
-    
+
     yields_mass = yields_percent.copy()
-    yields_mass["Mass (kg)"] = yields_percent["Yield (%)"] * initial_mass_kg / 100
+    yields_mass["Mass (kg)"] = yields_percent["Yield (%)"] * initial_mass_kg / 100.0
     yields_mass.drop(columns=["Yield (%)"], inplace=True)
 
-    gas_fraction = final_volatiles_lost_fraction * data["Gas_Factor"]
-    
-    gas_comp_mass = {
-        "CO2": 0.45 * gas_fraction * initial_mass_kg,
-        "CO": 0.35 * gas_fraction * initial_mass_kg,
-        "CH4": 0.15 * gas_fraction * initial_mass_kg,
-        "H2": 0.05 * gas_fraction * initial_mass_kg
-    }
-    
-    gas_composition_molar = pd.DataFrame.from_dict(
-        {k: v * 100 / final_volatiles_lost_fraction for k, v in gas_comp_mass.items() if final_volatiles_lost_fraction > 0.001}, 
-        orient="index", columns=["Molar % in Dry Gas"]
-    ).fillna(0)
+    # Gas fraction (mass of gas produced relative to initial mass) using Gas_Factor
+    gas_fraction = final_volatiles_lost_fraction * data.get("Gas_Factor", 1.0)
+    gas_total_mass = gas_fraction * initial_mass_kg
 
+    # if no gas produced, produce zero composition
+    if gas_total_mass <= 0 or final_volatiles_lost_fraction < 1e-6:
+        gas_comp_mass = {"CO2": 0.0, "CO": 0.0, "CH4": 0.0, "H2": 0.0}
+        gas_composition_molar = pd.DataFrame({"Molar % in Dry Gas": [0.0, 0.0, 0.0, 0.0]}, index=["CO2", "CO", "CH4", "H2"])
+    else:
+        # distribute gas mass (these are empirical fractions of the gas mass)
+        gas_comp_mass = {
+            "CO2": 0.45 * gas_total_mass,
+            "CO":  0.35 * gas_total_mass,
+            "CH4": 0.15 * gas_total_mass,
+            "H2":  0.05 * gas_total_mass
+        }
+        total = sum(gas_comp_mass.values())
+        # mass-based percentage of each species in the produced dry gas
+        gas_composition_molar = pd.DataFrame({
+            "Molar % in Dry Gas": [(m / total) * 100.0 for m in gas_comp_mass.values()]
+        }, index=list(gas_comp_mass.keys()))
+
+    # mass profile DataFrame (time series)
     mass_profile = pd.DataFrame({
         "Time (min)": t,
-        "Moisture Fraction": sol[:, 0],
+        "Moisture Fraction": moisture_profile,
         "Volatiles Fraction": sol[:, 1],
-        "Biochar Fraction": 1 - sol[:, 0] - sol[:, 1] - ash_content,
+        "Biochar Fraction": biochar_profile
     }).set_index("Time (min)")
-    
+
+    # final parameters
+    parameters = {
+        "biomass": biomass,
+        "moisture_%": moisture,
+        "temperature_C": temp_C,
+        "duration_min": duration_min,
+        "size": size,
+        "initial_mass_kg": initial_mass_kg,
+        "k_devol_eff": k_devol_eff,
+        "k_drying": k_drying
+    }
+
     return {
         "yields_percent": yields_percent,
         "yields_mass": yields_mass,
         "temp_profile": pd.DataFrame({"Temperature (°C)": temp_C * np.ones_like(t)}, index=t),
         "gas_composition_molar": gas_composition_molar,
+        "gas_comp_mass": gas_comp_mass,
         "mass_profile": mass_profile,
-        "k_devol_eff": k_devol_eff,
-        "parameters": {
-            "biomass": biomass, "moisture": moisture, "temperature": temp_C, 
-            "duration": duration_min, "size": size, "initial_mass": initial_mass_kg
-        }
-    }
+        "final_fractions": {
+            "moisture_fraction": final_moisture,
+            "volatiles_remaining_fraction": final_volatiles_remaining,
+            "biochar_fraction": final_biochar_fraction,
+            "ash_fraction": ash_content
+        },
+        "parameters": parameters
+    }ذ
 
 # --- 3. Streamlit Main App (main) ---
 def main():
@@ -483,3 +551,4 @@ def generate_pdf_report(results):
 
 if __name__ == "__main__":
     main()
+
