@@ -150,12 +150,16 @@ def generate_pdf_report(results):
     
     # -- Styles --
     title_style = styles["Title"]
+    title_style.textColor = colors.HexColor("#388E3C") # Dark Green for the title
+    
     heading_style = styles["Heading2"]
     heading_style.textColor = colors.HexColor("#2E7D32") # Green Theme
     
+    normal_style = styles["Normal"]
+    
     # -- 1. Header --
     elements.append(Paragraph("CHEMISCO PRO TORREFACTION REPORT", title_style))
-    elements.append(Paragraph(f"Report Date: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}", styles["Normal"]))
+    elements.append(Paragraph(f"Report Date: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}", normal_style)) # Fixed date formatting
     elements.append(Spacer(1, 0.2*inch))
     
     # -- 2. Parameters Table --
@@ -202,7 +206,7 @@ def generate_pdf_report(results):
     elements.append(t_yield)
     elements.append(Spacer(1, 0.1*inch))
     
-    elements.append(Paragraph(f"<b>Final Ash Concentration:</b> {results['final_ash_percent']:.2f}%", styles["Normal"]))
+    elements.append(Paragraph(f"<b>Final Ash Concentration:</b> {results['final_ash_percent']:.2f}%", normal_style))
     elements.append(Spacer(1, 0.2*inch))
     
     # -- 4. Visualizations (Matplotlib for Report) --
@@ -211,45 +215,51 @@ def generate_pdf_report(results):
     # Helper to capture plot
     def get_image_bytes(fig):
         img_buf = BytesIO()
-        fig.savefig(img_buf, format='png', bbox_inches='tight', dpi=150)
+        fig.savefig(img_buf, format='png', bbox_inches='tight', dpi=150, transparent=True) # Added transparent
         img_buf.seek(0)
         return img_buf
 
-    # A. Two Pie Charts Side-by-Side
+    # A. Two Pie Charts Side-by-Side (Adjusted colors and size)
     # Chart 1: Solid Comp
-    fig_pie1, ax_pie1 = plt.subplots(figsize=(4, 4))
-    colors_solid = ['#5D4037', '#8D6E63', '#BDBDBD']
-    ax_pie1.pie(results["solid_composition"]["Mass (kg)"], labels=results["solid_composition"].index, autopct='%1.1f%%', colors=colors_solid, startangle=140)
+    fig_pie1, ax_pie1 = plt.subplots(figsize=(4.5, 4.5)) # Slightly larger for better labels
+    colors_solid_pdf = ['#6A1B9A', '#AB47BC', '#BDBDBD'] # Purple shades
+    ax_pie1.pie(results["solid_composition"]["Mass (kg)"], labels=results["solid_composition"].index, 
+                autopct='%1.1f%%', colors=colors_solid_pdf, startangle=140, pctdistance=0.85, 
+                textprops={'fontsize': 8})
     ax_pie1.set_title("Solid Product Composition", fontsize=10, weight='bold')
-    img1 = ReportImage(get_image_bytes(fig_pie1), width=3*inch, height=3*inch)
+    img1 = ReportImage(get_image_bytes(fig_pie1), width=3.25*inch, height=3.25*inch) # Adjusted width/height
     
     # Chart 2: Global Balance
-    fig_pie2, ax_pie2 = plt.subplots(figsize=(4, 4))
+    fig_pie2, ax_pie2 = plt.subplots(figsize=(4.5, 4.5)) # Slightly larger
     filtered_yields = results["yields_percent"].iloc[[0, 1, 2]]
-    colors_global = ['#795548', '#90A4AE', '#81D4FA']
-    ax_pie2.pie(filtered_yields["Yield (%)"], labels=filtered_yields.index, autopct='%1.1f%%', colors=colors_global, startangle=90)
+    colors_global_pdf = ['#388E3C', '#7CB342', '#C5E1A5'] # Green shades
+    ax_pie2.pie(filtered_yields["Yield (%)"], labels=filtered_yields.index, 
+                autopct='%1.1f%%', colors=colors_global_pdf, startangle=90, pctdistance=0.85,
+                textprops={'fontsize': 8})
     ax_pie2.set_title("Global Mass Balance", fontsize=10, weight='bold')
-    img2 = ReportImage(get_image_bytes(fig_pie2), width=3*inch, height=3*inch)
+    img2 = ReportImage(get_image_bytes(fig_pie2), width=3.25*inch, height=3.25*inch) # Adjusted width/height
     
     # Arrange inside a Table
-    t_pies = Table([[img1, img2]], colWidths=[3.5*inch, 3.5*inch])
+    t_pies = Table([[img1, img2]], colWidths=[3.7*inch, 3.7*inch]) # Increased column width for spacing
     elements.append(t_pies)
     
     plt.close(fig_pie1)
     plt.close(fig_pie2)
     
+    elements.append(Spacer(1, 0.2*inch)) # Add some space
+    
     # B. Dual Axis Line Chart
     fig_line, ax1 = plt.subplots(figsize=(8, 4))
     
-    color_mass = 'tab:green'
+    color_mass = '#388E3C' # Dark Green
     ax1.set_xlabel('Time (min)')
-    ax1.set_ylabel('Total Mass (%)', color=color_mass, weight='bold')
+    ax1.set_ylabel('Total Mass Remaining (%)', color=color_mass, weight='bold')
     ax1.plot(results["mass_profile"].index, results["mass_profile"]["Total Mass Yield (%)"], color=color_mass, linewidth=2)
     ax1.tick_params(axis='y', labelcolor=color_mass)
-    ax1.grid(True, alpha=0.3)
+    ax1.grid(True, alpha=0.4, linestyle='--', color='lightgrey') # Lighter grid
     
     ax2 = ax1.twinx()
-    color_ash = 'tab:red'
+    color_ash = '#D32F2F' # Dark Red
     ax2.set_ylabel('Ash Concentration (%)', color=color_ash, weight='bold')
     ax2.plot(results["mass_profile"].index, results["mass_profile"]["Ash Concentration in Solid (%)"], color=color_ash, linewidth=2, linestyle='--')
     ax2.tick_params(axis='y', labelcolor=color_ash)
@@ -262,11 +272,11 @@ def generate_pdf_report(results):
 
     # C. Bar Chart (Gas)
     fig_bar, ax_bar = plt.subplots(figsize=(8, 3))
-    results["gas_composition_molar"].plot(kind='bar', ax=ax_bar, legend=False, color='#1565C0')
-    ax_bar.set_title("Dry Gas Composition (Molar %)")
+    results["gas_composition_molar"].plot(kind='bar', ax=ax_bar, legend=False, color='#1565C0') # Dark Blue for bars
+    ax_bar.set_title("Dry Gas Composition (Molar %)", fontsize=12)
     ax_bar.set_ylabel("Molar %")
     plt.xticks(rotation=0)
-    ax_bar.grid(axis='y', alpha=0.3)
+    ax_bar.grid(axis='y', alpha=0.4, linestyle='--', color='lightgrey') # Lighter grid
     
     img_bar = ReportImage(get_image_bytes(fig_bar), width=6.5*inch, height=2.5*inch)
     elements.append(img_bar)
@@ -372,7 +382,7 @@ def main():
         
         col_t1, col_t2 = st.columns(2)
         
-        # --- PLOTLY CHARTS (Interactive for UI) ---
+        # --- PLOTLY CHARTS (Interactive for UI - Adjusted Colors) ---
         with col_t1:
             st.markdown("##### Final Biochar Composition")
             st.caption("Solid Product Breakdown")
@@ -383,9 +393,9 @@ def main():
             fig1 = px.pie(df_solid, values='Mass (kg)', names='Component', hole=0.5,
                           color='Component',
                           color_discrete_map={
-                              "Fixed Carbon": "#3E2723", 
-                              "Remaining Volatiles": "#8D6E63",
-                              "Ash": "#B0BEC5"
+                              "Fixed Carbon": "#6A1B9A",  # Dark Purple
+                              "Remaining Volatiles": "#AB47BC", # Medium Purple
+                              "Ash": "#BDBDBD"  # Grey
                           })
             
             fig1.update_layout(
@@ -408,9 +418,9 @@ def main():
             fig2 = px.pie(filtered_yields, values='Yield (%)', names='Component', hole=0.5,
                           color='Component',
                           color_discrete_map={
-                              "Biochar (Solid Product)": "#5D4037",
-                              "Non-Condensable Gases": "#78909C",
-                              "Moisture Loss (Water Vapor)": "#81D4FA"
+                              "Biochar (Solid Product)": "#388E3C", # Dark Green
+                              "Non-Condensable Gases": "#7CB342", # Medium Green
+                              "Moisture Loss (Water Vapor)": "#C5E1A5" # Light Green
                           })
             
             fig2.update_layout(
@@ -443,7 +453,7 @@ def main():
             x=results["mass_profile"].index,
             y=results["mass_profile"]["Ash Concentration in Solid (%)"],
             name="Ash Concentration %",
-            line=dict(color="#FF5252", width=3, dash='dot'),
+            line=dict(color="#D32F2F", width=3, dash='dot'), # Dark Red for Ash
             yaxis="y2"
         ))
 
@@ -463,8 +473,8 @@ def main():
             
             # Right Axis (Secondary)
             yaxis2=dict(
-                title=dict(text="Ash Concentration (%)", font=dict(color="#FF5252")),
-                tickfont=dict(color="#FF5252"),
+                title=dict(text="Ash Concentration (%)", font=dict(color="#D32F2F")),
+                tickfont=dict(color="#D32F2F"),
                 overlaying="y",
                 side="right",
                 showgrid=False
@@ -503,3 +513,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+```http://googleusercontent.com/image_generation_content/0
