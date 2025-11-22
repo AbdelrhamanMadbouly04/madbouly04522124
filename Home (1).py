@@ -150,16 +150,16 @@ def generate_pdf_report(results):
     
     # -- Styles --
     title_style = styles["Title"]
-    title_style.textColor = colors.HexColor("#388E3C") # Dark Green for the title
+    title_style.textColor = colors.HexColor("#388E3C") # Green Theme Title
     
     heading_style = styles["Heading2"]
-    heading_style.textColor = colors.HexColor("#2E7D32") # Green Theme
+    heading_style.textColor = colors.HexColor("#2E7D32") # Green Theme Headings
     
     normal_style = styles["Normal"]
     
     # -- 1. Header --
     elements.append(Paragraph("CHEMISCO PRO TORREFACTION REPORT", title_style))
-    elements.append(Paragraph(f"Report Date: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}", normal_style)) # Fixed date formatting
+    elements.append(Paragraph(f"Report Date: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}", normal_style))
     elements.append(Spacer(1, 0.2*inch))
     
     # -- 2. Parameters Table --
@@ -215,38 +215,38 @@ def generate_pdf_report(results):
     # Helper to capture plot
     def get_image_bytes(fig):
         img_buf = BytesIO()
-        fig.savefig(img_buf, format='png', bbox_inches='tight', dpi=150, transparent=True) # Added transparent
+        fig.savefig(img_buf, format='png', bbox_inches='tight', dpi=150, transparent=True)
         img_buf.seek(0)
         return img_buf
 
     # A. Two Pie Charts Side-by-Side (Adjusted colors and size)
     # Chart 1: Solid Comp
-    fig_pie1, ax_pie1 = plt.subplots(figsize=(4.5, 4.5)) # Slightly larger for better labels
+    fig_pie1, ax_pie1 = plt.subplots(figsize=(4.5, 4.5)) 
     colors_solid_pdf = ['#6A1B9A', '#AB47BC', '#BDBDBD'] # Purple shades
     ax_pie1.pie(results["solid_composition"]["Mass (kg)"], labels=results["solid_composition"].index, 
                 autopct='%1.1f%%', colors=colors_solid_pdf, startangle=140, pctdistance=0.85, 
                 textprops={'fontsize': 8})
     ax_pie1.set_title("Solid Product Composition", fontsize=10, weight='bold')
-    img1 = ReportImage(get_image_bytes(fig_pie1), width=3.25*inch, height=3.25*inch) # Adjusted width/height
+    img1 = ReportImage(get_image_bytes(fig_pie1), width=3.25*inch, height=3.25*inch) 
     
     # Chart 2: Global Balance
-    fig_pie2, ax_pie2 = plt.subplots(figsize=(4.5, 4.5)) # Slightly larger
+    fig_pie2, ax_pie2 = plt.subplots(figsize=(4.5, 4.5))
     filtered_yields = results["yields_percent"].iloc[[0, 1, 2]]
     colors_global_pdf = ['#388E3C', '#7CB342', '#C5E1A5'] # Green shades
     ax_pie2.pie(filtered_yields["Yield (%)"], labels=filtered_yields.index, 
                 autopct='%1.1f%%', colors=colors_global_pdf, startangle=90, pctdistance=0.85,
                 textprops={'fontsize': 8})
     ax_pie2.set_title("Global Mass Balance", fontsize=10, weight='bold')
-    img2 = ReportImage(get_image_bytes(fig_pie2), width=3.25*inch, height=3.25*inch) # Adjusted width/height
+    img2 = ReportImage(get_image_bytes(fig_pie2), width=3.25*inch, height=3.25*inch)
     
     # Arrange inside a Table
-    t_pies = Table([[img1, img2]], colWidths=[3.7*inch, 3.7*inch]) # Increased column width for spacing
+    t_pies = Table([[img1, img2]], colWidths=[3.7*inch, 3.7*inch])
     elements.append(t_pies)
     
     plt.close(fig_pie1)
     plt.close(fig_pie2)
     
-    elements.append(Spacer(1, 0.2*inch)) # Add some space
+    elements.append(Spacer(1, 0.2*inch)) 
     
     # B. Dual Axis Line Chart
     fig_line, ax1 = plt.subplots(figsize=(8, 4))
@@ -256,7 +256,7 @@ def generate_pdf_report(results):
     ax1.set_ylabel('Total Mass Remaining (%)', color=color_mass, weight='bold')
     ax1.plot(results["mass_profile"].index, results["mass_profile"]["Total Mass Yield (%)"], color=color_mass, linewidth=2)
     ax1.tick_params(axis='y', labelcolor=color_mass)
-    ax1.grid(True, alpha=0.4, linestyle='--', color='lightgrey') # Lighter grid
+    ax1.grid(True, alpha=0.4, linestyle='--', color='lightgrey') 
     
     ax2 = ax1.twinx()
     color_ash = '#D32F2F' # Dark Red
@@ -272,11 +272,11 @@ def generate_pdf_report(results):
 
     # C. Bar Chart (Gas)
     fig_bar, ax_bar = plt.subplots(figsize=(8, 3))
-    results["gas_composition_molar"].plot(kind='bar', ax=ax_bar, legend=False, color='#1565C0') # Dark Blue for bars
+    results["gas_composition_molar"].plot(kind='bar', ax=ax_bar, legend=False, color='#1565C0') # Dark Blue
     ax_bar.set_title("Dry Gas Composition (Molar %)", fontsize=12)
     ax_bar.set_ylabel("Molar %")
     plt.xticks(rotation=0)
-    ax_bar.grid(axis='y', alpha=0.4, linestyle='--', color='lightgrey') # Lighter grid
+    ax_bar.grid(axis='y', alpha=0.4, linestyle='--', color='lightgrey')
     
     img_bar = ReportImage(get_image_bytes(fig_bar), width=6.5*inch, height=2.5*inch)
     elements.append(img_bar)
@@ -513,4 +513,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-```http://googleusercontent.com/image_generation_content/0
