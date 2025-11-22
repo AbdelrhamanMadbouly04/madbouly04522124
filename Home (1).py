@@ -180,7 +180,7 @@ def simulate_torrefaction(biomass, moisture, temp_C, duration_min, size, initial
             "ash_fraction": ash_content
         },
         "parameters": parameters
-    }ذ
+    }
 
 # --- 3. Streamlit Main App (main) ---
 def main():
@@ -551,4 +551,5 @@ def generate_pdf_report(results):
 
 if __name__ == "__main__":
     main()
+
 
