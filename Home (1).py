@@ -235,29 +235,27 @@ def main():
         
         col_t1, col_t2 = st.columns(2)
         
-        # --- NEW MODERN PLOTLY CHARTS (Donut Style) ---
+        # --- PLOTLY CHARTS (Donut Style) ---
         with col_t1:
             st.markdown("##### Final Biochar Composition")
             st.caption("Solid Product Breakdown")
             
-            # Data for Chart 1
             df_solid = results["solid_composition"].reset_index()
             df_solid.columns = ["Component", "Mass (kg)"]
             
-            # Donut Chart 1
             fig1 = px.pie(df_solid, values='Mass (kg)', names='Component', hole=0.5,
                           color='Component',
                           color_discrete_map={
-                              "Fixed Carbon": "#3E2723",  # Dark Espresso
-                              "Remaining Volatiles": "#8D6E63", # Wood Brown
-                              "Ash": "#B0BEC5"  # Ash Grey
+                              "Fixed Carbon": "#3E2723", 
+                              "Remaining Volatiles": "#8D6E63",
+                              "Ash": "#B0BEC5"
                           })
             
             fig1.update_layout(
                 showlegend=True,
                 legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
                 margin=dict(t=20, b=50, l=10, r=10),
-                paper_bgcolor='rgba(0,0,0,0)', # Transparent
+                paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)'
             )
             fig1.update_traces(textposition='inside', textinfo='percent+label')
@@ -267,17 +265,15 @@ def main():
             st.markdown("##### Global Mass Balance")
             st.caption("Initial Input vs. Final Output")
             
-            # Data for Chart 2
             filtered_yields = results["yields_percent"].iloc[[0, 1, 2]].reset_index()
             filtered_yields.columns = ["Component", "Yield (%)"]
             
-            # Donut Chart 2
             fig2 = px.pie(filtered_yields, values='Yield (%)', names='Component', hole=0.5,
                           color='Component',
                           color_discrete_map={
-                              "Biochar (Solid Product)": "#5D4037", # Brown
-                              "Non-Condensable Gases": "#78909C", # Blue Grey
-                              "Moisture Loss (Water Vapor)": "#81D4FA" # Light Blue
+                              "Biochar (Solid Product)": "#5D4037",
+                              "Non-Condensable Gases": "#78909C",
+                              "Moisture Loss (Water Vapor)": "#81D4FA"
                           })
             
             fig2.update_layout(
@@ -293,7 +289,7 @@ def main():
     with tab2:
         st.subheader("Ash Concentration & Mass Depletion Kinetics")
         
-        # --- FIXED DUAL-AXIS CHART (Strict Syntax for Streamlit Cloud) ---
+        # --- FIXED DUAL-AXIS CHART (No secondary_y argument) ---
         fig_dual = go.Figure()
 
         # Line 1: Total Mass (Left Axis)
@@ -301,7 +297,7 @@ def main():
             x=results["mass_profile"].index,
             y=results["mass_profile"]["Total Mass Yield (%)"],
             name="Total Mass %",
-            line=dict(color="#4CAF50", width=3), # Pro Green
+            line=dict(color="#4CAF50", width=3), 
             yaxis="y1"
         ))
 
@@ -310,19 +306,22 @@ def main():
             x=results["mass_profile"].index,
             y=results["mass_profile"]["Ash Concentration in Solid (%)"],
             name="Ash Concentration %",
-            line=dict(color="#FF5252", width=3, dash='dot'), # Accent Red
+            line=dict(color="#FF5252", width=3, dash='dot'),
             yaxis="y2"
         ))
 
-        # Corrected Layout Logic (Using nested dicts for fonts to prevent ValueError)
+        # Corrected Layout - All Grid settings moved inside update_layout
         fig_dual.update_layout(
             title="Dynamic Ash Enrichment Logic",
-            xaxis=dict(title="Time (min)"),
+            xaxis=dict(title="Time (min)", showgrid=False),
             
             # Left Axis (Primary)
             yaxis=dict(
                 title=dict(text="Total Mass Remaining (%)", font=dict(color="#4CAF50")),
-                tickfont=dict(color="#4CAF50")
+                tickfont=dict(color="#4CAF50"),
+                showgrid=True,
+                gridwidth=1,
+                gridcolor='rgba(255,255,255,0.1)'
             ),
             
             # Right Axis (Secondary)
@@ -330,7 +329,8 @@ def main():
                 title=dict(text="Ash Concentration (%)", font=dict(color="#FF5252")),
                 tickfont=dict(color="#FF5252"),
                 overlaying="y",
-                side="right"
+                side="right",
+                showgrid=False
             ),
             
             legend=dict(x=0.1, y=1.1, orientation="h"),
@@ -339,10 +339,6 @@ def main():
             plot_bgcolor='rgba(0,0,0,0)',
             height=450
         )
-        # Add grid only for primary axis
-        fig_dual.update_yaxes(showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)', secondary_y=False)
-        fig_dual.update_yaxes(showgrid=False, secondary_y=True)
-        fig_dual.update_xaxes(showgrid=False)
 
         st.plotly_chart(fig_dual, use_container_width=True)
         
