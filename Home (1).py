@@ -1,7 +1,8 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
+import plotly.express as px
+import plotly.graph_objects as go # For the advanced Dual-Axis chart
 from scipy.integrate import odeint
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as ReportImage, Table
@@ -19,7 +20,7 @@ EMPIRICAL_DATA = {
 }
 SIZE_FACTOR = {"Fine (<1mm)": 1.0, "Medium (1-5mm)": 0.85, "Coarse (>5mm)": 0.65}
 
-# --- 2. Static UI Components (UNCHANGED) ---
+# --- 2. Global CSS (UNCHANGED) ---
 GLOBAL_CSS = """
 <style>
     .stApp { padding-top: 20px; }
@@ -46,59 +47,14 @@ GLOBAL_CSS = """
         font-size: 28px;
         color: #388E3C; 
     }
-    .bfd-container {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        margin: 30px 0 60px 0;
-        position: relative;
-    }
-    .bfd-block {
-        padding: 15px 25px;
-        border: 3px solid #4CAF50; 
-        border-radius: 6px;
-        text-align: center;
-        background-color: #E8F5E9; 
-        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
-        font-weight: bold;
-        color: #1B5E20; 
-        position: relative;
-        min-width: 180px;
-    }
+    /* BFD Styles */
+    .bfd-container { display: flex; justify-content: center; align-items: center; margin: 30px 0 60px 0; position: relative; }
+    .bfd-block { padding: 15px 25px; border: 3px solid #4CAF50; border-radius: 6px; text-align: center; background-color: #E8F5E9; box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15); font-weight: bold; color: #1B5E20; position: relative; min-width: 180px; }
     .bfd-block p { margin: 5px 0 0; font-size: 12px; font-weight: normal; }
-    .bfd-stream {
-        width: 70px;
-        height: 3px;
-        background-color: #4CAF50;
-        position: relative;
-    }
-    .bfd-stream::before { 
-        content: '';
-        position: absolute;
-        right: -10px;
-        top: -5px;
-        border-top: 6px solid transparent;
-        border-bottom: 6px solid transparent;
-        border-left: 10px solid #4CAF50;
-    }
-    .side-stream {
-        position: absolute;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 3px;
-        height: 40px;
-        background-color: #FF9800; 
-        bottom: -40px;
-    }
-    .side-stream-label {
-        position: absolute;
-        bottom: -65px;
-        left: 50%;
-        transform: translateX(-50%);
-        font-size: 11px;
-        white-space: nowrap;
-        color: #FF9800;
-    }
+    .bfd-stream { width: 70px; height: 3px; background-color: #4CAF50; position: relative; }
+    .bfd-stream::before { content: ''; position: absolute; right: -10px; top: -5px; border-top: 6px solid transparent; border-bottom: 6px solid transparent; border-left: 10px solid #4CAF50; }
+    .side-stream { position: absolute; left: 50%; transform: translateX(-50%); width: 3px; height: 40px; background-color: #FF9800; bottom: -40px; }
+    .side-stream-label { position: absolute; bottom: -65px; left: 50%; transform: translateX(-50%); font-size: 11px; white-space: nowrap; color: #FF9800; }
 </style>
 """
 
@@ -186,10 +142,10 @@ def simulate_torrefaction(biomass, moisture, temp_C, duration_min, size, initial
 
 # --- 4. Main Streamlit App ---
 def main():
-    st.set_page_config(page_title="Chemisco Pro Torrefaction Simulator", layout="wide", initial_sidebar_state="expanded")
+    st.set_page_config(page_title="Chemisco Pro", layout="wide", initial_sidebar_state="expanded")
     st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
 
-    # 4.1. Sidebar (UNCHANGED)
+    # Sidebar
     with st.sidebar:
         st.markdown("""
             <div style='text-align: center; padding: 15px; border-radius: 8px; background-color: #1B5E20;'>
@@ -209,7 +165,7 @@ def main():
             ash_percent_init = EMPIRICAL_DATA[biomass_type]["Ash"] * 100
             st.info(f"Initial Ash Content: **{ash_percent_init:.1f}%**")
 
-    # 4.2. Main Content
+    # Main Banner
     st.markdown("""
         <div class="main-banner">
             <h1>🔥 Advanced Torrefaction Simulator</h1>
@@ -217,7 +173,7 @@ def main():
         </div>
         """, unsafe_allow_html=True)
     
-    # BFD (UNCHANGED)
+    # BFD
     st.subheader("Process Flow Block Diagram (BFD)")
     bfd_html = f"""
     <div class="bfd-container">
@@ -279,75 +235,107 @@ def main():
         
         col_t1, col_t2 = st.columns(2)
         
-        # --- MODIFIED SECTION FOR PIE CHARTS ---
+        # --- NEW MODERN PLOTLY CHARTS (Donut Style) ---
         with col_t1:
-            st.markdown("##### Final Biochar Composition (Solid Product Only)")
-            st.caption("Notice how the Ash portion is larger here than in the raw material due to mass loss.")
-            # Create fig with equal size (6x6) and transparent background
-            fig_solid, ax_solid = plt.subplots(figsize=(6, 6))
-            fig_solid.patch.set_alpha(0.0)
-            ax_solid.patch.set_alpha(0.0)
+            st.markdown("##### Final Biochar Composition")
+            st.caption("Solid Product Breakdown")
             
-            colors_solid = ['#4E342E', '#8D6E63', '#BDBDBD']
-            ax_solid.pie(
-                results["solid_composition"]["Mass (kg)"], 
-                labels=results["solid_composition"].index, 
-                autopct='%1.1f%%', 
-                startangle=140, 
-                colors=colors_solid,
-                explode=(0, 0, 0.1)
+            # Data for Chart 1
+            df_solid = results["solid_composition"].reset_index()
+            df_solid.columns = ["Component", "Mass (kg)"]
+            
+            # Donut Chart 1
+            fig1 = px.pie(df_solid, values='Mass (kg)', names='Component', hole=0.5,
+                          color='Component',
+                          color_discrete_map={
+                              "Fixed Carbon": "#3E2723",  # Dark Espresso
+                              "Remaining Volatiles": "#8D6E63", # Wood Brown
+                              "Ash": "#B0BEC5"  # Ash Grey
+                          })
+            
+            fig1.update_layout(
+                showlegend=True,
+                legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
+                margin=dict(t=20, b=50, l=10, r=10),
+                paper_bgcolor='rgba(0,0,0,0)', # Transparent
+                plot_bgcolor='rgba(0,0,0,0)'
             )
-            # Set title color to be visible on dark background if needed, or rely on Streamlit theme
-            ax_solid.set_title(f"Composition of the {biochar_mass:.1f} kg Biochar Produced", color='white')
-            # Use facecolor='none' for transparency
-            st.pyplot(fig_solid, facecolor='none')
-        
+            fig1.update_traces(textposition='inside', textinfo='percent+label')
+            st.plotly_chart(fig1, use_container_width=True)
+
         with col_t2:
-            st.markdown("##### Global Mass Balance (Initial vs Output)")
-            # Create fig with equal size (6x6) and transparent background
-            fig1, ax1 = plt.subplots(figsize=(6, 6))
-            fig1.patch.set_alpha(0.0)
-            ax1.patch.set_alpha(0.0)
+            st.markdown("##### Global Mass Balance")
+            st.caption("Initial Input vs. Final Output")
             
-            filtered_yields = results["yields_percent"].iloc[[0, 1, 2]] 
-            ax1.pie(filtered_yields["Yield (%)"].values, labels=filtered_yields.index, autopct='%1.1f%%', startangle=90, colors=['#795548', '#CFD8DC', '#B3E5FC'])
-            ax1.set_title("Overall Process Mass Balance", color='white')
-            # Use facecolor='none' for transparency
-            st.pyplot(fig1, facecolor='none')
+            # Data for Chart 2
+            filtered_yields = results["yields_percent"].iloc[[0, 1, 2]].reset_index()
+            filtered_yields.columns = ["Component", "Yield (%)"]
+            
+            # Donut Chart 2
+            fig2 = px.pie(filtered_yields, values='Yield (%)', names='Component', hole=0.5,
+                          color='Component',
+                          color_discrete_map={
+                              "Biochar (Solid Product)": "#5D4037", # Brown
+                              "Non-Condensable Gases": "#78909C", # Blue Grey
+                              "Moisture Loss (Water Vapor)": "#81D4FA" # Light Blue
+                          })
+            
+            fig2.update_layout(
+                showlegend=True,
+                legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
+                margin=dict(t=20, b=50, l=10, r=10),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)'
+            )
+            fig2.update_traces(textposition='inside', textinfo='percent')
+            st.plotly_chart(fig2, use_container_width=True)
 
     with tab2:
-        st.subheader("Ash Concentration & Mass Depletion Logic")
-        # Create fig with transparent background
-        fig_k, ax_mass = plt.subplots(figsize=(10, 5))
-        fig_k.patch.set_alpha(0.0)
-        ax_mass.patch.set_alpha(0.0)
+        st.subheader("Ash Concentration & Mass Depletion Kinetics")
+        
+        # --- UPGRADED DUAL-AXIS CHART (Plotly Go) ---
+        fig_dual = go.Figure()
 
-        color_mass = 'tab:green'
-        ax_mass.set_xlabel('Time (min)', color='white')
-        ax_mass.set_ylabel('Total Mass Remaining (%)', color=color_mass)
-        ax_mass.plot(results["mass_profile"].index, results["mass_profile"]["Total Mass Yield (%)"], color=color_mass, linewidth=2.5, label="Total Mass %")
-        ax_mass.tick_params(axis='y', labelcolor=color_mass)
-        ax_mass.tick_params(axis='x', labelcolor='white') # X-axis ticks white
-        ax_mass.grid(True, linestyle='--', alpha=0.5)
-        # Change spines color for better visibility
-        for spine in ax_mass.spines.values(): spine.set_color('white')
+        # Line 1: Total Mass (Left Axis)
+        fig_dual.add_trace(go.Scatter(
+            x=results["mass_profile"].index,
+            y=results["mass_profile"]["Total Mass Yield (%)"],
+            name="Total Mass %",
+            line=dict(color="#4CAF50", width=3), # Pro Green
+            yaxis="y1"
+        ))
 
-        ax_ash = ax_mass.twinx()
-        color_ash = 'tab:grey'
-        # Lighter color for better visibility on dark background
-        display_ash_color = '#E0E0E0' 
-        ax_ash.set_ylabel('Ash Concentration in Solid (%)', color=display_ash_color, fontsize=12, weight='bold')
-        ax_ash.plot(results["mass_profile"].index, results["mass_profile"]["Ash Concentration in Solid (%)"], color=color_ash, linewidth=3, linestyle='-', label="Ash % (Enrichment)")
-        ax_ash.tick_params(axis='y', labelcolor=display_ash_color)
-        for spine in ax_ash.spines.values(): spine.set_color('white')
+        # Line 2: Ash Concentration (Right Axis)
+        fig_dual.add_trace(go.Scatter(
+            x=results["mass_profile"].index,
+            y=results["mass_profile"]["Ash Concentration in Solid (%)"],
+            name="Ash Concentration %",
+            line=dict(color="#FF5252", width=3, dash='dot'), # Accent Red
+            yaxis="y2"
+        ))
 
-        plt.title("Kinetic Logic: As Mass Decreases, Ash Concentration Increases", color='white')
-        # Use facecolor='none' for transparency
-        st.pyplot(fig_k, facecolor='none')
-        st.caption("""
-        **Interpretation:** The Green line shows the total mass of the biomass decreasing due to drying and devolatilization. 
-        The **Grey Line** represents the **Ash Concentration**. As you can see, it rises according to the logical equation: 
-        $Ash_{\%} = Mass_{Ash} / Mass_{CurrentSolid}$.
+        # Layout Logic
+        fig_dual.update_layout(
+            title="Dynamic Ash Enrichment Logic",
+            xaxis=dict(title="Time (min)"),
+            yaxis=dict(title="Total Mass Remaining (%)", titlefont=dict(color="#4CAF50"), tickfont=dict(color="#4CAF50")),
+            yaxis2=dict(title="Ash Concentration (%)", titlefont=dict(color="#FF5252"), tickfont=dict(color="#FF5252"), overlaying="y", side="right"),
+            legend=dict(x=0.1, y=1.1, orientation="h"),
+            hovermode="x unified",
+            paper_bgcolor='rgba(0,0,0,0)', # Transparent
+            plot_bgcolor='rgba(0,0,0,0)',
+            height=450
+        )
+        # Add grid only for primary axis to avoid clutter
+        fig_dual.update_yaxes(showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.1)', secondary_y=False)
+        fig_dual.update_yaxes(showgrid=False, secondary_y=True)
+        fig_dual.update_xaxes(showgrid=False)
+
+        st.plotly_chart(fig_dual, use_container_width=True)
+        
+        st.info("""
+        **Logic Explanation:** The green line drops as moisture and volatiles leave the biomass. 
+        Since Ash is inert (does not react), its *concentration* (Red Dotted Line) must mathematically increase as the total mass decreases.
         """)
 
     with tab3:
