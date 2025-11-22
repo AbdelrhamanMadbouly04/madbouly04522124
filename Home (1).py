@@ -5,11 +5,12 @@ import plotly.express as px
 import plotly.graph_objects as go
 from scipy.integrate import odeint
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as ReportImage, Table
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as ReportImage, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet
 from io import BytesIO
 from reportlab.lib.units import inch
 from reportlab.lib import colors
+import matplotlib.pyplot as plt # Essential for PDF generation
 
 # --- 1. Chemical and Empirical Constants (UNCHANGED) ---
 R_GAS = 8.314
@@ -140,7 +141,143 @@ def simulate_torrefaction(biomass, moisture, temp_C, duration_min, size, initial
         }
     }
 
-# --- 4. Main Streamlit App ---
+# --- 4. PDF Report Generation Function (OPTIMIZED) ---
+def generate_pdf_report(results):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch)
+    styles = getSampleStyleSheet()
+    elements = []
+    
+    # -- Styles --
+    title_style = styles["Title"]
+    heading_style = styles["Heading2"]
+    heading_style.textColor = colors.HexColor("#2E7D32") # Green Theme
+    
+    # -- 1. Header --
+    elements.append(Paragraph("CHEMISCO PRO TORREFACTION REPORT", title_style))
+    elements.append(Paragraph(f"Report Date: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}", styles["Normal"]))
+    elements.append(Spacer(1, 0.2*inch))
+    
+    # -- 2. Parameters Table --
+    elements.append(Paragraph("1. Simulation Parameters & Kinetics", heading_style))
+    p = results["parameters"]
+    param_data = [
+        ["Parameter", "Value"],
+        ["Biomass Type", p['biomass']],
+        ["Initial Mass", f"{p['initial_mass']} kg"],
+        ["Moisture Content", f"{p['moisture']}%"],
+        ["Temperature", f"{p['temperature']} °C"],
+        ["Duration", f"{p['duration']} min"],
+        ["Particle Size", p["size"]],
+        ["Eff. Devol Rate", f"{results['k_devol_eff']:.4f} min-1"]
+    ]
+    
+    t_param = Table(param_data, colWidths=[3*inch, 3*inch])
+    t_param.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#E8F5E9")), # Light Green Header
+        ('TEXTCOLOR', (0,0), (-1,0), colors.black),
+        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('BOTTOMPADDING', (0,0), (-1,0), 6),
+        ('GRID', (0,0), (-1,-1), 1, colors.grey),
+    ]))
+    elements.append(t_param)
+    elements.append(Spacer(1, 0.2*inch))
+    
+    # -- 3. Yields Table --
+    elements.append(Paragraph("2. Product Yields (Mass Balance)", heading_style))
+    yield_data = [["Component", "Mass (kg)", "Yield (%)"]]
+    for idx, row in results["yields_percent"].iterrows():
+        mass = results["yields_mass"].loc[idx, "Mass (kg)"]
+        yield_data.append([idx, f"{mass:.2f}", f"{row['Yield (%)']:.2f}"])
+        
+    t_yield = Table(yield_data, colWidths=[3*inch, 1.5*inch, 1.5*inch])
+    t_yield.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#E8F5E9")),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.black),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('GRID', (0,0), (-1,-1), 1, colors.grey),
+        ('ALIGN', (1,0), (-1,-1), 'CENTER'), # Center numbers
+    ]))
+    elements.append(t_yield)
+    elements.append(Spacer(1, 0.1*inch))
+    
+    elements.append(Paragraph(f"<b>Final Ash Concentration:</b> {results['final_ash_percent']:.2f}%", styles["Normal"]))
+    elements.append(Spacer(1, 0.2*inch))
+    
+    # -- 4. Visualizations (Matplotlib for Report) --
+    elements.append(Paragraph("3. Results Visualization", heading_style))
+    
+    # Helper to capture plot
+    def get_image_bytes(fig):
+        img_buf = BytesIO()
+        fig.savefig(img_buf, format='png', bbox_inches='tight', dpi=150)
+        img_buf.seek(0)
+        return img_buf
+
+    # A. Two Pie Charts Side-by-Side
+    # Chart 1: Solid Comp
+    fig_pie1, ax_pie1 = plt.subplots(figsize=(4, 4))
+    colors_solid = ['#5D4037', '#8D6E63', '#BDBDBD']
+    ax_pie1.pie(results["solid_composition"]["Mass (kg)"], labels=results["solid_composition"].index, autopct='%1.1f%%', colors=colors_solid, startangle=140)
+    ax_pie1.set_title("Solid Product Composition", fontsize=10, weight='bold')
+    img1 = ReportImage(get_image_bytes(fig_pie1), width=3*inch, height=3*inch)
+    
+    # Chart 2: Global Balance
+    fig_pie2, ax_pie2 = plt.subplots(figsize=(4, 4))
+    filtered_yields = results["yields_percent"].iloc[[0, 1, 2]]
+    colors_global = ['#795548', '#90A4AE', '#81D4FA']
+    ax_pie2.pie(filtered_yields["Yield (%)"], labels=filtered_yields.index, autopct='%1.1f%%', colors=colors_global, startangle=90)
+    ax_pie2.set_title("Global Mass Balance", fontsize=10, weight='bold')
+    img2 = ReportImage(get_image_bytes(fig_pie2), width=3*inch, height=3*inch)
+    
+    # Arrange inside a Table
+    t_pies = Table([[img1, img2]], colWidths=[3.5*inch, 3.5*inch])
+    elements.append(t_pies)
+    
+    plt.close(fig_pie1)
+    plt.close(fig_pie2)
+    
+    # B. Dual Axis Line Chart
+    fig_line, ax1 = plt.subplots(figsize=(8, 4))
+    
+    color_mass = 'tab:green'
+    ax1.set_xlabel('Time (min)')
+    ax1.set_ylabel('Total Mass (%)', color=color_mass, weight='bold')
+    ax1.plot(results["mass_profile"].index, results["mass_profile"]["Total Mass Yield (%)"], color=color_mass, linewidth=2)
+    ax1.tick_params(axis='y', labelcolor=color_mass)
+    ax1.grid(True, alpha=0.3)
+    
+    ax2 = ax1.twinx()
+    color_ash = 'tab:red'
+    ax2.set_ylabel('Ash Concentration (%)', color=color_ash, weight='bold')
+    ax2.plot(results["mass_profile"].index, results["mass_profile"]["Ash Concentration in Solid (%)"], color=color_ash, linewidth=2, linestyle='--')
+    ax2.tick_params(axis='y', labelcolor=color_ash)
+    
+    plt.title("Mass Depletion vs. Ash Enrichment", fontsize=12)
+    img_line = ReportImage(get_image_bytes(fig_line), width=6.5*inch, height=3.25*inch)
+    elements.append(img_line)
+    elements.append(Spacer(1, 0.1*inch))
+    plt.close(fig_line)
+
+    # C. Bar Chart (Gas)
+    fig_bar, ax_bar = plt.subplots(figsize=(8, 3))
+    results["gas_composition_molar"].plot(kind='bar', ax=ax_bar, legend=False, color='#1565C0')
+    ax_bar.set_title("Dry Gas Composition (Molar %)")
+    ax_bar.set_ylabel("Molar %")
+    plt.xticks(rotation=0)
+    ax_bar.grid(axis='y', alpha=0.3)
+    
+    img_bar = ReportImage(get_image_bytes(fig_bar), width=6.5*inch, height=2.5*inch)
+    elements.append(img_bar)
+    plt.close(fig_bar)
+    
+    # Build
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer
+
+# --- 5. Main Streamlit App ---
 def main():
     st.set_page_config(page_title="Chemisco Pro", layout="wide", initial_sidebar_state="expanded")
     st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
@@ -235,7 +372,7 @@ def main():
         
         col_t1, col_t2 = st.columns(2)
         
-        # --- PLOTLY CHARTS (Donut Style) ---
+        # --- PLOTLY CHARTS (Interactive for UI) ---
         with col_t1:
             st.markdown("##### Final Biochar Composition")
             st.caption("Solid Product Breakdown")
@@ -289,7 +426,7 @@ def main():
     with tab2:
         st.subheader("Ash Concentration & Mass Depletion Kinetics")
         
-        # --- FIXED DUAL-AXIS CHART (No secondary_y argument) ---
+        # --- FIXED DUAL-AXIS CHART ---
         fig_dual = go.Figure()
 
         # Line 1: Total Mass (Left Axis)
@@ -310,7 +447,7 @@ def main():
             yaxis="y2"
         ))
 
-        # Corrected Layout - All Grid settings moved inside update_layout
+        # Corrected Layout
         fig_dual.update_layout(
             title="Dynamic Ash Enrichment Logic",
             xaxis=dict(title="Time (min)", showgrid=False),
@@ -352,38 +489,17 @@ def main():
         st.bar_chart(results["gas_composition_molar"])
 
     with tab4:
-        st.subheader("Download Report")
+        st.subheader("Download Professional Report")
+        st.markdown("Generate a high-quality PDF report including all tables and charts properly formatted.")
+        
         if st.button("⬇️ Download PDF Report"):
             pdf_buffer = generate_pdf_report(results)
             st.download_button(
                 label="Download Report",
                 data=pdf_buffer,
-                file_name=f"Torrefaction_Report.pdf",
+                file_name=f"Torrefaction_Report_Professional.pdf",
                 mime="application/pdf"
             )
-
-# --- 5. PDF Report Generation Function (UNCHANGED) ---
-def generate_pdf_report(results):
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter)
-    styles = getSampleStyleSheet()
-    elements = []
-    elements.append(Paragraph("Torrefaction Simulation Report", styles["Title"]))
-    elements.append(Spacer(1, 0.2*inch))
-    p = results["parameters"]
-    elements.append(Paragraph(f"Biomass: {p['biomass']} | Temp: {p['temperature']} C | Time: {p['duration']} min", styles["Normal"]))
-    elements.append(Spacer(1, 0.2*inch))
-    data = [["Component", "Mass (kg)", "Yield (%)"]]
-    for idx, row in results["yields_percent"].iterrows():
-        mass = results["yields_mass"].loc[idx, "Mass (kg)"]
-        data.append([idx, f"{mass:.2f}", f"{row['Yield (%)']:.2f}"])
-    t = Table(data, style=[('GRID', (0,0), (-1,-1), 1, colors.black)])
-    elements.append(t)
-    elements.append(Spacer(1, 0.5*inch))
-    elements.append(Paragraph(f"Final Ash Concentration: {results['final_ash_percent']:.2f}%", styles["h3"]))
-    doc.build(elements)
-    buffer.seek(0)
-    return buffer
 
 if __name__ == "__main__":
     main()
