@@ -10,41 +10,21 @@ from io import BytesIO
 from reportlab.lib.units import inch
 from reportlab.lib import colors
 
-# --- 1. Chemical and Empirical Constants ---
-R_GAS = 8.314  # Universal Gas Constant (J/mol·K)
-
+# --- 1. Chemical and Empirical Constants (UNCHANGED) ---
+R_GAS = 8.314
 EMPIRICAL_DATA = {
-    "Wood": {
-        "A": 2.5e10, "Ea": 135000, "k_drying_base": 0.05, 
-        "Ash": 0.02, "Gas_Factor": 0.35
-    },
-    "Agricultural Waste": {
-        "A": 5.0e11, "Ea": 150000, "k_drying_base": 0.07, 
-        "Ash": 0.08, "Gas_Factor": 0.45
-    },
-    "Municipal Waste": {
-        "A": 1.0e12, "Ea": 165000, "k_drying_base": 0.10, 
-        "Ash": 0.15, "Gas_Factor": 0.55
-    }
+    "Wood": {"A": 2.5e10, "Ea": 135000, "k_drying_base": 0.05, "Ash": 0.02, "Gas_Factor": 0.35},
+    "Agricultural Waste": {"A": 5.0e11, "Ea": 150000, "k_drying_base": 0.07, "Ash": 0.08, "Gas_Factor": 0.45},
+    "Municipal Waste": {"A": 1.0e12, "Ea": 165000, "k_drying_base": 0.10, "Ash": 0.15, "Gas_Factor": 0.55}
 }
+SIZE_FACTOR = {"Fine (<1mm)": 1.0, "Medium (1-5mm)": 0.85, "Coarse (>5mm)": 0.65}
 
-SIZE_FACTOR = {
-    "Fine (<1mm)": 1.0,
-    "Medium (1-5mm)": 0.85,
-    "Coarse (>5mm)": 0.65
-}
-
-# --- 2. Static UI Components ---
-
-# Global CSS styles
+# --- 2. Static UI Components (UNCHANGED) ---
 GLOBAL_CSS = """
 <style>
-    /* Main Content Styling */
     .stApp { padding-top: 20px; }
-    
-    /* Custom Banner Style */
     .main-banner {
-        background-color: #388E3C; /* Darker Green */
+        background-color: #388E3C;
         padding: 30px;
         border-radius: 12px;
         text-align: center;
@@ -53,12 +33,7 @@ GLOBAL_CSS = """
     }
     .main-banner h1 { color: #FFFFFF; margin: 0; font-size: 2.5em; }
     .main-banner p { color: #C8E6C9; margin-top: 5px; font-size: 1.1em; }
-    
-    /* Sidebar Customization */
-    .st-emotion-cache-1na6f8g, .st-emotion-cache-1d391kg { 
-        background-color: #F0F8FF; 
-    }
-    /* Expander (Input) styling */
+    .st-emotion-cache-1na6f8g, .st-emotion-cache-1d391kg { background-color: #F0F8FF; }
     .st-emotion-cache-p5m8m8 { 
         border-radius: 10px;
         border-left: 5px solid #4CAF50; 
@@ -67,13 +42,10 @@ GLOBAL_CSS = """
         background-color: #FFFFFF;
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
-    /* Metric Styling */
     [data-testid="stMetricValue"] {
         font-size: 28px;
         color: #388E3C; 
     }
-
-    /* BFD Styles (UNCHANGED) */
     .bfd-container {
         display: flex;
         justify-content: center;
@@ -93,11 +65,7 @@ GLOBAL_CSS = """
         position: relative;
         min-width: 180px;
     }
-    .bfd-block p {
-         margin: 5px 0 0;
-         font-size: 12px;
-         font-weight: normal;
-    }
+    .bfd-block p { margin: 5px 0 0; font-size: 12px; font-weight: normal; }
     .bfd-stream {
         width: 70px;
         height: 3px;
@@ -134,26 +102,18 @@ GLOBAL_CSS = """
 </style>
 """
 
-# --- 3. Simulation Core Logic ---
+# --- 3. Simulation Core Logic (UNCHANGED) ---
 def simulate_torrefaction(biomass, moisture, temp_C, duration_min, size, initial_mass_kg):
-    """Core torrefaction simulation logic with dynamic Ash Concentration."""
     temp_K = temp_C + 273.15
     data = EMPIRICAL_DATA.get(biomass)
-    
-    # Arrhenius Equation
     k_devol_arrhenius = data["A"] * np.exp(-data["Ea"] / (R_GAS * temp_K))
     k_devol_eff = k_devol_arrhenius * SIZE_FACTOR.get(size)
     k_drying = data["k_drying_base"] 
-    
-    # Initial Mass Fractions
     initial_moisture_frac = moisture / 100
     initial_ash_frac = data["Ash"]
     initial_volatiles_frac = 1.0 - initial_moisture_frac - initial_ash_frac
-    
-    # Mass values (Fixed)
     mass_ash_kg = initial_mass_kg * initial_ash_frac
     
-    # ODE Model
     def model(y, t, k1, k2):
         m_moist, m_vol = y
         d_moist = -k1 * m_moist if m_moist > 0.001 else 0
@@ -161,67 +121,30 @@ def simulate_torrefaction(biomass, moisture, temp_C, duration_min, size, initial
         return [d_moist, d_vol]
     
     t = np.linspace(0, duration_min, 100)
-    y0 = [initial_moisture_frac, initial_volatiles_frac] # Fractions of INITIAL TOTAL MASS
-    
+    y0 = [initial_moisture_frac, initial_volatiles_frac]
     sol = odeint(model, y0, t, args=(k_drying, k_devol_eff))
     sol[sol < 0] = 0
-
-    # Extracting profiles relative to Initial Mass
-    # Note: Moisture logic modified to ensure 0 at end for balance calculation
-    # But we use the curve for the graph
     moisture_curve = sol[:, 0] 
     volatiles_curve = sol[:, 1]
-    
-    # Fixed Carbon (Calculated by difference from initial, assuming FC mass is constant in this simplified model 
-    # or effectively calculating the "Biochar Base" residue)
-    # Current Mass Fraction = Moisture + Volatiles + Ash + FixedCarbon
-    # Fixed Carbon Fraction (of initial) = 1 - Init_Moist - Init_Vol - Init_Ash
     fixed_carbon_frac_initial = 1.0 - initial_moisture_frac - initial_volatiles_frac - initial_ash_frac
-    
-    # --- DYNAMIC ASH CALCULATION (The Logical Equation) ---
-    # We calculate the Mass of the SOLID product at every time step.
-    # Solid Mass(t) = Total Mass(t) - Moisture(t) (if we consider dry basis) OR 
-    # Actually for biochar composition: Solid = Fixed Carbon + Remaining Volatiles + Ash + Remaining Moisture
-    
-    # Fractions of Initial Mass at time t:
     current_total_mass_fraction = moisture_curve + volatiles_curve + fixed_carbon_frac_initial + initial_ash_frac
-    
-    # Calculate Percentage of Ash in the REMAINING Mass (Concentration)
-    # Formula: (Constant Ash Mass / Decreasing Total Mass) * 100
     ash_concentration_percent = (initial_ash_frac / current_total_mass_fraction) * 100
     
-    # --- Final Yields Calculation ---
-    # Strictly forcing moisture loss = initial moisture
     final_moisture_loss = initial_moisture_frac
     final_volatiles_remaining = volatiles_curve[-1]
     final_volatiles_lost = initial_volatiles_frac - final_volatiles_remaining
-    
-    # Solid Yield (Biochar)
     final_solid_fraction = 1.0 - final_moisture_loss - final_volatiles_lost
-    
-    # Component Mass in Final Biochar
     mass_biochar_total = final_solid_fraction * initial_mass_kg
-    
-    # Final Ash % in the produced Biochar
     final_ash_percent = (mass_ash_kg / mass_biochar_total) * 100
 
-    # DataFrames for Output
     yields_percent = pd.DataFrame({
-        "Yield (%)": [
-            final_solid_fraction * 100,
-            final_volatiles_lost * 100,
-            final_moisture_loss * 100,
-            initial_ash_frac * 100 # Reference
-        ]},
+        "Yield (%)": [final_solid_fraction * 100, final_volatiles_lost * 100, final_moisture_loss * 100, initial_ash_frac * 100]},
         index=["Biochar (Solid Product)", "Non-Condensable Gases", "Moisture Loss (Water Vapor)", "Original Ash Content"]
     )
-    
     yields_mass = yields_percent.copy()
     yields_mass["Mass (kg)"] = yields_percent["Yield (%)"] * initial_mass_kg / 100
     yields_mass.drop(columns=["Yield (%)"], inplace=True)
 
-    # Composition of the SOLID PRODUCT specifically (for the new Pie Chart)
-    # Solid consists of: Ash + Fixed Carbon + Remaining Volatiles (Moisture is 0)
     mass_volatiles_remaining = final_volatiles_remaining * initial_mass_kg
     mass_fixed_carbon = fixed_carbon_frac_initial * initial_mass_kg
     
@@ -229,7 +152,6 @@ def simulate_torrefaction(biomass, moisture, temp_C, duration_min, size, initial
         "Mass (kg)": [mass_fixed_carbon, mass_volatiles_remaining, mass_ash_kg]
     }, index=["Fixed Carbon", "Remaining Volatiles", "Ash"])
 
-    # Gas Composition
     gas_fraction = final_volatiles_lost * data["Gas_Factor"]
     gas_comp_mass = {
         "CO2": 0.45 * gas_fraction * initial_mass_kg,
@@ -242,7 +164,6 @@ def simulate_torrefaction(biomass, moisture, temp_C, duration_min, size, initial
         orient="index", columns=["Molar % in Dry Gas"]
     ).fillna(0)
 
-    # Profile Dataframe for Charts
     mass_profile = pd.DataFrame({
         "Time (min)": t,
         "Total Mass Yield (%)": current_total_mass_fraction * 100,
@@ -268,7 +189,7 @@ def main():
     st.set_page_config(page_title="Chemisco Pro Torrefaction Simulator", layout="wide", initial_sidebar_state="expanded")
     st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
 
-    # 4.1. Sidebar
+    # 4.1. Sidebar (UNCHANGED)
     with st.sidebar:
         st.markdown("""
             <div style='text-align: center; padding: 15px; border-radius: 8px; background-color: #1B5E20;'>
@@ -277,17 +198,14 @@ def main():
             </div>
             """, unsafe_allow_html=True)
         st.header("⚙️ Input Parameters")
-        
         with st.expander("🌲 Biomass Properties", expanded=True):
             initial_mass_kg = st.number_input("Initial Biomass Mass (kg)", min_value=1.0, value=100.0, step=10.0)
             biomass_type = st.selectbox("Biomass Type", list(EMPIRICAL_DATA.keys()))
             moisture_content = st.slider("Initial Moisture Content (%)", 0.0, 50.0, 10.0, step=1.0)
             particle_size = st.selectbox("Particle Size", list(SIZE_FACTOR.keys()))
-        
         with st.expander("🌡️ Process Conditions", expanded=True):
             temperature = st.slider("Torrefaction Temperature (°C)", 200, 350, 275, step=5)
             duration = st.slider("Process Duration (min)", 10, 120, 45, step=5)
-            
             ash_percent_init = EMPIRICAL_DATA[biomass_type]["Ash"] * 100
             st.info(f"Initial Ash Content: **{ash_percent_init:.1f}%**")
 
@@ -299,7 +217,7 @@ def main():
         </div>
         """, unsafe_allow_html=True)
     
-    # BFD (Unchanged)
+    # BFD (UNCHANGED)
     st.subheader("Process Flow Block Diagram (BFD)")
     bfd_html = f"""
     <div class="bfd-container">
@@ -333,12 +251,10 @@ def main():
     """
     st.markdown(bfd_html, unsafe_allow_html=True)
     
-    # Check Input
     if moisture_content / 100 + EMPIRICAL_DATA[biomass_type]["Ash"] > 1:
         st.error("**Input Error:** Initial Moisture and Ash content exceed 100%.")
         return 
         
-    # Run Simulation
     results = simulate_torrefaction(biomass_type, moisture_content, temperature, duration, particle_size, initial_mass_kg)
     
     # --- Display Results ---
@@ -352,7 +268,6 @@ def main():
         biochar_mass = results["yields_mass"].loc["Biochar (Solid Product)", "Mass (kg)"]
         col_m1.metric("⚖️ Total Biochar Mass", f"{biochar_mass:.2f} kg")
         
-        # Dynamic Ash Metric
         final_ash = results["final_ash_percent"]
         ash_increase = final_ash - ash_percent_init
         col_m2.metric("⚗️ Final Ash Concentration", f"{final_ash:.2f} %", delta=f"+{ash_increase:.2f}% (Enrichment)")
@@ -363,57 +278,72 @@ def main():
         st.markdown("---")
         
         col_t1, col_t2 = st.columns(2)
+        
+        # --- MODIFIED SECTION FOR PIE CHARTS ---
         with col_t1:
             st.markdown("##### Final Biochar Composition (Solid Product Only)")
             st.caption("Notice how the Ash portion is larger here than in the raw material due to mass loss.")
-            fig_solid, ax_solid = plt.subplots(figsize=(5, 5))
+            # Create fig with equal size (6x6) and transparent background
+            fig_solid, ax_solid = plt.subplots(figsize=(6, 6))
+            fig_solid.patch.set_alpha(0.0)
+            ax_solid.patch.set_alpha(0.0)
             
-            # Pie chart for SOLID composition only
-            colors_solid = ['#4E342E', '#8D6E63', '#BDBDBD'] # Dark Brown (C), Light Brown (Vol), Grey (Ash)
-            wedges, texts, autotexts = ax_solid.pie(
+            colors_solid = ['#4E342E', '#8D6E63', '#BDBDBD']
+            ax_solid.pie(
                 results["solid_composition"]["Mass (kg)"], 
                 labels=results["solid_composition"].index, 
                 autopct='%1.1f%%', 
                 startangle=140, 
                 colors=colors_solid,
-                explode=(0, 0, 0.1) # Explode Ash to highlight it
+                explode=(0, 0, 0.1)
             )
-            ax_solid.set_title(f"Composition of the {biochar_mass:.1f} kg Biochar Produced")
-            st.pyplot(fig_solid)
+            # Set title color to be visible on dark background if needed, or rely on Streamlit theme
+            ax_solid.set_title(f"Composition of the {biochar_mass:.1f} kg Biochar Produced", color='white')
+            # Use facecolor='none' for transparency
+            st.pyplot(fig_solid, facecolor='none')
         
         with col_t2:
             st.markdown("##### Global Mass Balance (Initial vs Output)")
-            fig1, ax1 = plt.subplots(figsize=(5, 5))
+            # Create fig with equal size (6x6) and transparent background
+            fig1, ax1 = plt.subplots(figsize=(6, 6))
+            fig1.patch.set_alpha(0.0)
+            ax1.patch.set_alpha(0.0)
+            
             filtered_yields = results["yields_percent"].iloc[[0, 1, 2]] 
             ax1.pie(filtered_yields["Yield (%)"].values, labels=filtered_yields.index, autopct='%1.1f%%', startangle=90, colors=['#795548', '#CFD8DC', '#B3E5FC'])
-            ax1.set_title("Overall Process Mass Balance")
-            st.pyplot(fig1)
+            ax1.set_title("Overall Process Mass Balance", color='white')
+            # Use facecolor='none' for transparency
+            st.pyplot(fig1, facecolor='none')
 
     with tab2:
         st.subheader("Ash Concentration & Mass Depletion Logic")
-        
-        # Create a dual-axis plot to show Mass dropping and Ash Concentration rising
+        # Create fig with transparent background
         fig_k, ax_mass = plt.subplots(figsize=(10, 5))
-        
-        # Plot 1: Total Mass (Left Axis)
+        fig_k.patch.set_alpha(0.0)
+        ax_mass.patch.set_alpha(0.0)
+
         color_mass = 'tab:green'
-        ax_mass.set_xlabel('Time (min)')
+        ax_mass.set_xlabel('Time (min)', color='white')
         ax_mass.set_ylabel('Total Mass Remaining (%)', color=color_mass)
         ax_mass.plot(results["mass_profile"].index, results["mass_profile"]["Total Mass Yield (%)"], color=color_mass, linewidth=2.5, label="Total Mass %")
         ax_mass.tick_params(axis='y', labelcolor=color_mass)
+        ax_mass.tick_params(axis='x', labelcolor='white') # X-axis ticks white
         ax_mass.grid(True, linestyle='--', alpha=0.5)
-        
-        # Plot 2: Ash Concentration (Right Axis)
-        ax_ash = ax_mass.twinx()  # instantiate a second axes that shares the same x-axis
+        # Change spines color for better visibility
+        for spine in ax_mass.spines.values(): spine.set_color('white')
+
+        ax_ash = ax_mass.twinx()
         color_ash = 'tab:grey'
-        ax_ash.set_ylabel('Ash Concentration in Solid (%)', color=color_ash, fontsize=12, weight='bold')
+        # Lighter color for better visibility on dark background
+        display_ash_color = '#E0E0E0' 
+        ax_ash.set_ylabel('Ash Concentration in Solid (%)', color=display_ash_color, fontsize=12, weight='bold')
         ax_ash.plot(results["mass_profile"].index, results["mass_profile"]["Ash Concentration in Solid (%)"], color=color_ash, linewidth=3, linestyle='-', label="Ash % (Enrichment)")
-        ax_ash.tick_params(axis='y', labelcolor=color_ash)
-        
-        # Added logic annotation
-        plt.title("Kinetic Logic: As Mass Decreases, Ash Concentration Increases")
-        
-        st.pyplot(fig_k)
+        ax_ash.tick_params(axis='y', labelcolor=display_ash_color)
+        for spine in ax_ash.spines.values(): spine.set_color('white')
+
+        plt.title("Kinetic Logic: As Mass Decreases, Ash Concentration Increases", color='white')
+        # Use facecolor='none' for transparency
+        st.pyplot(fig_k, facecolor='none')
         st.caption("""
         **Interpretation:** The Green line shows the total mass of the biomass decreasing due to drying and devolatilization. 
         The **Grey Line** represents the **Ash Concentration**. As you can see, it rises according to the logical equation: 
@@ -435,33 +365,25 @@ def main():
                 mime="application/pdf"
             )
 
-# --- 5. PDF Report Generation Function ---
+# --- 5. PDF Report Generation Function (UNCHANGED) ---
 def generate_pdf_report(results):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter)
     styles = getSampleStyleSheet()
     elements = []
-    
     elements.append(Paragraph("Torrefaction Simulation Report", styles["Title"]))
     elements.append(Spacer(1, 0.2*inch))
-    
-    # Parameters
     p = results["parameters"]
     elements.append(Paragraph(f"Biomass: {p['biomass']} | Temp: {p['temperature']} C | Time: {p['duration']} min", styles["Normal"]))
     elements.append(Spacer(1, 0.2*inch))
-    
-    # Yields
     data = [["Component", "Mass (kg)", "Yield (%)"]]
     for idx, row in results["yields_percent"].iterrows():
         mass = results["yields_mass"].loc[idx, "Mass (kg)"]
         data.append([idx, f"{mass:.2f}", f"{row['Yield (%)']:.2f}"])
-        
     t = Table(data, style=[('GRID', (0,0), (-1,-1), 1, colors.black)])
     elements.append(t)
-    
     elements.append(Spacer(1, 0.5*inch))
     elements.append(Paragraph(f"Final Ash Concentration: {results['final_ash_percent']:.2f}%", styles["h3"]))
-    
     doc.build(elements)
     buffer.seek(0)
     return buffer
