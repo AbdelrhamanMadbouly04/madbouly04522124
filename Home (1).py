@@ -67,7 +67,7 @@ GLOBAL_CSS = """
 </style>
 """
 
-# --- 3. Mathematical Models (Corrected Logic) ---
+# --- 3. Mathematical Models ---
 
 def moisture_evap_linear(initial_moisture_kg, T_C, t_min, k_f=0.02):
     """(A) Linear moisture evaporation model (starts > 100°C)"""
@@ -93,7 +93,7 @@ def m_gas(dry_mass_kg, T_C, t_min, C_gas=0.20):
     return dry_mass_kg * C_gas * (1.0 - math.exp(-k_gas * t_min))
 
 def hh_increase_fraction(Y_solid):
-    """(F) HHV increase"""
+    """(F) HHV increase based on solid yield loss"""
     return 0.25 * (1.0 - Y_solid)
 
 def run_simulation(mass_in, moisture_pct, ash_pct_dry, temp_c, time_min, params):
@@ -188,11 +188,6 @@ def main():
     st.set_page_config(page_title="Chemisco Pro", layout="wide", initial_sidebar_state="expanded")
     st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
     
-    # --- OPTIONAL: Botpress Inject (Commented out to prevent loading lag) ---
-    # Uncomment lines below if you need the chatbot back
-    # js_code = """<script>if(!window.parent.document.getElementById('botpress-inject')){var s=window.parent.document.createElement('script');s.id='botpress-inject';s.src='https://cdn.botpress.cloud/webchat/v3.4/inject.js';window.parent.document.head.appendChild(s);s.onload=function(){var s2=window.parent.document.createElement('script');s2.src='https://files.bpcontent.cloud/2025/11/28/23/20251128230307-F5JAD1ML.js';s2.defer=true;window.parent.document.body.appendChild(s2);}}</script>"""
-    # components.html(js_code, height=0, width=0)
-
     if 'cost_biomass' not in st.session_state: 
         st.session_state.update({'cost_biomass': 30.0, 'cost_energy': 0.15, 'price_char': 1.20})
 
@@ -313,14 +308,66 @@ def main():
 
     with t4:
         if game_mode:
-            st.info("🎯 Goal: Yield > 70% AND HHV > 22 MJ/kg")
-            if res['mass_yield_pct'] > 70 and res['hhv_final'] > 22:
+            st.markdown("### 🎯 Engineering Challenge: Find the Sweet Spot")
+            st.markdown("""
+            **مهمتك كمهندس:** المستثمر عايز منتج مواصفاته عالية (Bio-Coal) وفي نفس الوقت يحقق ربح.
+            عشان تكسب لازم تحقق الـ 3 شروط دول في نفس الوقت:
+            1.  **الجودة:** كثافة الطاقة (HHV) لازم تكون **أعلى من 22.0 MJ/kg**.
+            2.  **الإنتاجية:** صافي الوزن (Yield) لازم يكون **أعلى من 55%** (متحرقش البضاعة!).
+            3.  **الاقتصاد:** لازم تحقق **صافي ربح موجب (> $0)**.
+            """)
+            
+            st.markdown("---")
+
+            # 1. تحديد الأهداف
+            TARGET_HHV = 22.0
+            MIN_YIELD = 55.0
+            TARGET_PROFIT = 0.0
+
+            # 2. عرض العدادات مقارنة بالهدف
+            col_g1, col_g2, col_g3 = st.columns(3)
+            
+            # HHV Check
+            delta_hhv = res['hhv_final'] - TARGET_HHV
+            col_g1.metric("Energy Density (HHV)", f"{res['hhv_final']:.2f} MJ/kg", f"{delta_hhv:.2f} (Target: >22)", 
+                          delta_color="normal" if res['hhv_final'] >= TARGET_HHV else "inverse")
+            
+            # Yield Check
+            delta_yield = res['mass_yield_pct'] - MIN_YIELD
+            col_g2.metric("Mass Yield", f"{res['mass_yield_pct']:.1f}%", f"{delta_yield:.1f}% (Target: >55%)",
+                          delta_color="normal" if res['mass_yield_pct'] >= MIN_YIELD else "inverse")
+            
+            # Profit Check
+            col_g3.metric("Net Profit", f"${profit:.2f}", "Must be Positive",
+                          delta_color="normal" if profit > 0 else "inverse")
+
+            st.markdown("---")
+
+            # 3. منطق الفوز والخسارة
+            success_hhv = res['hhv_final'] >= TARGET_HHV
+            success_yield = res['mass_yield_pct'] >= MIN_YIELD
+            success_profit = profit > TARGET_PROFIT
+
+            if success_hhv and success_yield and success_profit:
                 st.balloons()
-                st.success(f"🏆 WINNER! Yield: {res['mass_yield_pct']:.1f}%, HHV: {res['hhv_final']:.2f}")
+                st.success("🏆 **مبــــروك! لقد وجدت التوازن المثالي (The Sweet Spot)**")
+                score = (res['hhv_final'] * res['mass_yield_pct']) + profit
+                st.metric("🌟 Engineering Score", f"{int(score)}")
+                st.caption("السكور بيتحسب بناءً على الجودة والربح مع بعض.")
             else:
-                st.warning(f"Current: Yield {res['mass_yield_pct']:.1f}%, HHV {res['hhv_final']:.2f}")
+                st.error("❌ **محاولة غير ناجحة.. جرب تاني!**")
+                
+                # تحليل سبب الخسارة (Feedback)
+                st.markdown("#### 💡 نصائح المهندس الاستشاري:")
+                if not success_hhv:
+                    st.warning("🔸 **جودة منخفضة:** المنتج لسه خشب خام. **زود الحرارة أو الوقت** عشان تعلي الـ HHV.")
+                if not success_yield:
+                    st.warning("🔸 **حرق زائد:** إنت حرقت كمية كبيرة من الخشب. **قلل الحرارة أو الوقت** عشان تحافظ على الوزن.")
+                if not success_profit:
+                    st.warning("🔸 **خسارة مادية:** تكلفة الطاقة عالية أو كمية الفحم اللي بعتها قليلة. حاول تظبط المعادلة.")
+
         else:
-            st.write("Tick 'Optimization Mode' in sidebar to play.")
+            st.info("👈 قم بتفعيل **'Optimization Mode'** من القائمة الجانبية لبدء اللعبة.")
 
 if __name__ == "__main__":
     main()
