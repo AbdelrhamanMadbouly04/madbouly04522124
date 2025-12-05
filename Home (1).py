@@ -215,7 +215,7 @@ def create_pdf(res, profit, fig1, fig2):
     add_plot(fig2, "Figure 2: Solid Composition")
     
     story.append(Spacer(1, 30))
-    story.append(Paragraph("<font color=grey size=8>Chemisco Simulator v3.3 | Confidential & Proprietary</font>", styles['Normal']))
+    story.append(Paragraph("<font color=grey size=8>Chemisco Simulator v3.4 | Confidential & Proprietary</font>", styles['Normal']))
     doc.build(story)
     buffer.seek(0)
     return buffer
@@ -224,28 +224,26 @@ def create_pdf(res, profit, fig1, fig2):
 def main():
     st.set_page_config(page_title="Chemisco Pro", layout="wide", initial_sidebar_state="expanded")
     
-    # --- BOTPRESS AI INJECTION START ---
-    # This injects the scripts into the parent window so the chatbot floats correctly
-    botpress_code = """
+    # *** 🚀 INJECT BOTPRESS (EXACT CODE FROM HOME (9) (1).PY) ***
+    js_code = """
     <script>
-      // Function to inject script into parent window
-      const injectBot = () => {
-          const script1 = window.parent.document.createElement('script');
-          script1.src = "https://cdn.botpress.cloud/webchat/v3.4/inject.js";
-          window.parent.document.head.appendChild(script1);
-          
-          script1.onload = () => {
-              const script2 = window.parent.document.createElement('script');
-              script2.src = "https://files.bpcontent.cloud/2025/11/28/23/20251128230307-F5JAD1ML.js";
-              script2.defer = true;
-              window.parent.document.body.appendChild(script2);
-          };
-      };
-      injectBot();
+        if (!window.parent.document.getElementById('botpress-inject')) {
+            var script1 = window.parent.document.createElement('script');
+            script1.id = 'botpress-inject';
+            script1.src = 'https://cdn.botpress.cloud/webchat/v3.4/inject.js';
+            window.parent.document.head.appendChild(script1);
+            
+            script1.onload = function() {
+                var script2 = window.parent.document.createElement('script');
+                script2.src = 'https://files.bpcontent.cloud/2025/11/28/23/20251128230307-F5JAD1ML.js';
+                script2.defer = true;
+                window.parent.document.body.appendChild(script2);
+            };
+        }
     </script>
     """
-    components.html(botpress_code, height=0, width=0)
-    # --- BOTPRESS AI INJECTION END ---
+    components.html(js_code, height=0, width=0)
+    # ***************************************************************
 
     st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
     
