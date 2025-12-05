@@ -8,5 +8,6 @@ matplotlib
 fpdf
 kaleido
 scipy
+scikit-learn
 
 
