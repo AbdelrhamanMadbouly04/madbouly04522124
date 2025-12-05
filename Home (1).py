@@ -67,17 +67,17 @@ GLOBAL_CSS = """
 </style>
 """
 
-# --- 3. Mathematical Models ---
+# --- 3. Mathematical Models (Updated Logic) ---
 
 def moisture_evap_linear(initial_moisture_kg, T_C, t_min, k_f=0.02):
-    """(A) Linear moisture evaporation model (starts > 100°C)"""
+    """(A) Linear moisture evaporation"""
     if T_C <= 100:
         return 0.0
     evap_kg = k_f * (T_C - 100) * t_min * initial_moisture_kg
     return min(initial_moisture_kg, max(0.0, evap_kg))
 
 def Y_solid_empirical(T_C, t_min, a=0.35, b=0.004):
-    """(C) Empirical solid yield loss model"""
+    """(C) Solid Yield Model"""
     severity = max(0.0, T_C - 200) * t_min
     expo = math.exp(-b * severity)
     return 1.0 - a * (1.0 - expo)
@@ -92,9 +92,22 @@ def m_gas(dry_mass_kg, T_C, t_min, C_gas=0.20):
     k_gas = 0.0015 * max(0.0, T_C - 180)
     return dry_mass_kg * C_gas * (1.0 - math.exp(-k_gas * t_min))
 
-def hh_increase_fraction(Y_solid):
-    """(F) HHV increase based on solid yield loss"""
-    return 0.25 * (1.0 - Y_solid)
+def hhv_improved_model(Y_solid, temp_c, enhancement_factor=0.85):
+    """
+    (F) Improved HHV Model
+    Calculates energy density increase based on mass loss + thermal carbonization.
+    """
+    mass_loss_fraction = 1.0 - Y_solid
+    
+    # Base increase from volatile loss
+    base_increase = mass_loss_fraction * enhancement_factor
+    
+    # Thermal Bonus (Carbonization effect > 280C)
+    temp_bonus = 0.0
+    if temp_c > 280:
+        temp_bonus = 0.02 * ((temp_c - 280) / 50.0)
+        
+    return base_increase + temp_bonus
 
 def run_simulation(mass_in, moisture_pct, ash_pct_dry, temp_c, time_min, params):
     moisture_frac = moisture_pct / 100.0
@@ -104,20 +117,24 @@ def run_simulation(mass_in, moisture_pct, ash_pct_dry, temp_c, time_min, params)
     M0_dry = mass_in * (1.0 - moisture_frac)
     M_ash = M0_dry * ash_frac_dry
     
-    # Calculations
+    # 1. Moisture
     w_evap = moisture_evap_linear(M0_water, temp_c, time_min, k_f=params['k_f'])
     w_remaining = M0_water - w_evap
     
+    # 2. Devolatilization
     oil_kg = m_oil(M0_dry, temp_c, time_min, C_oil=params['C_oil'])
     gas_kg = m_gas(M0_dry, temp_c, time_min, C_gas=params['C_gas'])
     
-    # Mass Balance
+    # 3. Mass Balance
     char_dry = max(0, M0_dry - oil_kg - gas_kg) 
     char_total_mass = char_dry + w_remaining
     
-    # Energy
+    # 4. Energy (Updated)
     y_solid_val = Y_solid_empirical(temp_c, time_min, a=params['a_solid'], b=params['b_solid'])
-    hhv_inc_frac = hh_increase_fraction(y_solid_val)
+    
+    enh_factor = params.get('energy_factor', 0.85) # New factor
+    hhv_inc_frac = hhv_improved_model(y_solid_val, temp_c, enhancement_factor=enh_factor)
+    
     hhv_final = HHV_DRY_INITIAL_DEFAULT * (1.0 + hhv_inc_frac)
     
     energy_in = M0_dry * HHV_DRY_INITIAL_DEFAULT
@@ -213,7 +230,11 @@ def main():
             p_a = st.number_input("Solid Yield Factor (a)", 0.1, 0.5, 0.35)
             p_b = st.number_input("Degradation (b)", 0.001, 0.01, 0.004, format="%.4f")
             
-        params = {"k_f": p_kf, "C_oil": p_Coil, "C_gas": p_Cgas, "a_solid": p_a, "b_solid": p_b}
+            st.markdown("---")
+            st.caption("Energy Density Control")
+            p_enh = st.slider("Energy Factor", 0.2, 1.5, 0.85, help="Controls how fast HHV rises with mass loss.")
+            
+        params = {"k_f": p_kf, "C_oil": p_Coil, "C_gas": p_Cgas, "a_solid": p_a, "b_solid": p_b, "energy_factor": p_enh}
 
         with st.expander("💰 Economics", expanded=False):
             st.session_state.cost_biomass = st.number_input("Feed ($/ton)", value=st.session_state.cost_biomass)
