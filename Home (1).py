@@ -19,51 +19,58 @@ CP_WATER = 4180.0
 H_VAPOR = 2260000.0
 HHV_DRY_INITIAL_DEFAULT = 18.0
 
-# --- 2. Styles (Professional Bio-Tech Theme) ---
+# --- 2. Styles (Professional Clean Theme) ---
 GLOBAL_CSS = """
 <style>
+    /* Main Background */
     .stApp { background-color: #f4f6f9; font-family: 'Segoe UI', sans-serif; }
     
-    /* Sidebar */
+    /* Sidebar Styles */
     section[data-testid="stSidebar"] { background-color: #1a3c34; color: #ffffff; }
     section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2, 
     section[data-testid="stSidebar"] label { color: #e0f2f1 !important; }
     section[data-testid="stSidebar"] .stMarkdown, section[data-testid="stSidebar"] p { color: #b2dfdb !important; }
 
-    /* Headings */
-    h1, h2, h3 { color: #263238 !important; font-weight: 700; }
-    .stMarkdown, p, div, span, li { color: #37474f; }
+    /* Text Colors - High Contrast */
+    h1, h2, h3 { color: #1a3c34 !important; font-weight: 700; }
+    .stMarkdown, p, div, span, li { color: #2c3e50; }
 
-    /* Metrics */
+    /* Metrics Cards */
     div[data-testid="stMetric"] {
         background-color: #ffffff !important;
-        border: 1px solid #e0e0e0; border-left: 5px solid #1a3c34;
-        border-radius: 8px; padding: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        border: 1px solid #d1d5db; border-left: 6px solid #1a3c34;
+        border-radius: 8px; padding: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);
     }
     div[data-testid="stMetricValue"] { color: #1a3c34 !important; }
-    div[data-testid="stMetricLabel"] { color: #546e7a !important; }
+    div[data-testid="stMetricLabel"] { color: #546e7a !important; font-weight: 600; }
 
-    /* Inputs */
-    .stButton > button { background-color: #1a3c34 !important; color: white !important; border: none; font-weight: 600; }
-    .stSlider > div > div > div > div { background-color: #26a69a !important; }
+    /* Buttons */
+    .stButton > button { 
+        background-color: #1a3c34 !important; color: white !important; 
+        border: none; font-weight: bold; border-radius: 6px;
+    }
 
-    /* Flow Blocks */
+    /* Flow Visualization Blocks */
     .bfd-block {
         padding: 15px; border-radius: 8px; text-align: center; background: #ffffff;
-        border: 1px solid #cfd8dc; color: #37474f; font-weight: bold;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        border: 2px solid #1a3c34; color: #37474f; font-weight: bold;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
     }
     .bfd-stream { color: #1a3c34; font-size: 24px; padding-top: 10px; font-weight: bold; }
 
-    /* Header Box */
+    /* Sidebar Header - Clean Look */
     .header-box {
-        background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1);
-        padding: 20px; border-radius: 8px; text-align: center; margin-bottom: 25px;
+        background: transparent; 
+        border: 2px solid rgba(255, 255, 255, 0.2);
+        padding: 20px; border-radius: 10px; text-align: center; margin-bottom: 25px;
     }
-    .header-box h1 { color: #ffffff !important; margin: 0; font-size: 1.8rem; }
-    .header-box p { color: #80cbc4 !important; margin: 0; font-size: 0.9rem; }
+    .header-box h1 { color: #ffffff !important; margin: 0; font-size: 2rem; text-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+    .header-box p { color: #a7ffeb !important; margin: 0; font-size: 1rem; font-weight: 500; }
 
+    /* Tabs */
+    div[data-testid="stTabs"] button { color: #546e7a; font-weight: 600; }
     div[data-testid="stTabs"] button[aria-selected="true"] { color: #1a3c34 !important; border-bottom: 3px solid #1a3c34 !important; }
+    
     #MainMenu, footer, .stDeployButton {visibility: hidden;}
 </style>
 """
@@ -135,94 +142,66 @@ def get_time_series(mass_in, moisture_pct, ash_pct_dry, temp_c, time_min, params
         })
     return pd.DataFrame(data)
 
-# --- 4. Professional PDF Generator with Charts ---
+# --- 4. Professional PDF Generator ---
 def create_pdf(res, profit, fig1, fig2):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter)
     styles = getSampleStyleSheet()
     story = []
     
-    # --- Colors ---
     CHEMISCO_GREEN = colors.HexColor('#1a3c34')
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
     
-    # --- 1. Header (Company & Time) ---
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
-    # Logo / Company Name
+    # Header
     header_data = [
         [Paragraph("<b>CHEMISCO</b><br/><font size=10 color=grey>Bio-Engineering Solutions</font>", styles['Title']),
-         Paragraph(f"<font size=10><b>Generated on:</b><br/>{current_time}</font>", styles['Normal'])]
+         Paragraph(f"<font size=10><b>Date:</b> {current_time}</font>", styles['Normal'])]
     ]
     t_head = Table(header_data, colWidths=[4*inch, 3*inch])
-    t_head.setStyle(TableStyle([
-        ('ALIGN', (0,0), (0,0), 'LEFT'),
-        ('ALIGN', (1,0), (1,0), 'RIGHT'),
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
-    ]))
-    story.append(t_head)
-    story.append(Spacer(1, 20))
+    t_head.setStyle(TableStyle([('ALIGN', (0,0), (0,0), 'LEFT'), ('ALIGN', (1,0), (1,0), 'RIGHT'), ('VALIGN', (0,0), (-1,-1), 'TOP')]))
+    story.append(t_head); story.append(Spacer(1, 20))
     
-    # --- 2. Title ---
-    title_style = ParagraphStyle(name='CustomTitle', parent=styles['Heading2'], textColor=CHEMISCO_GREEN, fontSize=16)
-    story.append(Paragraph("Process Simulation Technical Report", title_style))
+    # Title
+    story.append(Paragraph("Process Simulation Technical Report", ParagraphStyle(name='Title', parent=styles['Heading2'], textColor=CHEMISCO_GREEN, fontSize=16)))
     story.append(Spacer(1, 10))
-    story.append(Paragraph("This document summarizes the simulation results for the biomass torrefaction process based on the current input parameters.", styles['Normal']))
+    story.append(Paragraph("This report outlines the mass and energy balance results for the specified torrefaction process parameters.", styles['Normal']))
     story.append(Spacer(1, 20))
 
-    # --- 3. Key Metrics Table ---
+    # Metrics
     data = [
         ["Metric", "Value"], 
         ["Mass Yield", f"{res['mass_yield_pct']:.1f} %"], 
         ["Energy Density (HHV)", f"{res['hhv_final']:.2f} MJ/kg"],
         ["Energy Yield", f"{res['energy_yield_pct']:.1f} %"],
         ["Bio-Oil Produced", f"{res['oil_kg']:.2f} kg"],
-        ["Net Profit Estimate", f"${profit:.2f}"]
+        ["Profit Estimate", f"${profit:.2f}"]
     ]
     t = Table(data, colWidths=[3.5*inch, 2.5*inch])
     t.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), CHEMISCO_GREEN), 
-        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke), 
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-        ('BOTTOMPADDING', (0,0), (-1,0), 12),
-        ('BACKGROUND', (0,1), (-1,-1), colors.whitesmoke),
+        ('BACKGROUND', (0,0), (-1,0), CHEMISCO_GREEN), ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'), ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('BOTTOMPADDING', (0,0), (-1,0), 12), ('BACKGROUND', (0,1), (-1,-1), colors.whitesmoke),
         ('GRID', (0,0), (-1,-1), 1, colors.grey)
     ]))
-    story.append(t)
-    story.append(Spacer(1, 30))
+    story.append(t); story.append(Spacer(1, 30))
 
-    # --- 4. Charts Integration ---
-    def add_plot_to_story(fig, title):
+    # Charts Helper
+    def add_plot(fig, title):
         try:
-            # IMPORTANT: Force White Background for Print
-            # This ensures charts look good on paper regardless of the app theme
-            fig.update_layout(
-                paper_bgcolor="white", 
-                plot_bgcolor="white",
-                font=dict(color="black")
-            )
-            
-            # Convert Plotly fig to image bytes
+            # FORCE White Background for PDF Clarity
+            fig.update_layout(paper_bgcolor="white", plot_bgcolor="white", font=dict(color="black"))
             img_bytes = fig.to_image(format="png", width=600, height=350, scale=2)
-            img_buffer = BytesIO(img_bytes)
-            img = Image(img_buffer, width=6*inch, height=3.5*inch)
-            
             story.append(Paragraph(f"<b>{title}</b>", styles['Heading3']))
-            story.append(Spacer(1, 5))
-            story.append(img)
+            story.append(Image(BytesIO(img_bytes), width=6*inch, height=3.5*inch))
             story.append(Spacer(1, 20))
-        except Exception as e:
-            # Fallback message if kaleido is still missing
-            story.append(Paragraph(f"<i>Chart could not be rendered. Error: {str(e)}</i>", styles['Normal']))
-            story.append(Spacer(1, 20))
+        except Exception:
+            story.append(Paragraph(f"<i>Chart '{title}' could not be rendered. Ensure 'kaleido==0.2.1' is installed.</i>", styles['Normal']))
 
-    add_plot_to_story(fig1, "Figure 1: Mass Balance Distribution")
-    add_plot_to_story(fig2, "Figure 2: Solid Composition Analysis")
+    add_plot(fig1, "Figure 1: Mass Balance Distribution")
+    add_plot(fig2, "Figure 2: Solid Composition")
     
-    # --- 5. Footer ---
     story.append(Spacer(1, 30))
-    story.append(Paragraph("<font color=grey size=8>Chemisco Simulator v3.0 | Confidential & Proprietary</font>", styles['Normal']))
-
+    story.append(Paragraph("<font color=grey size=8>Chemisco Simulator v3.1 | Confidential</font>", styles['Normal']))
     doc.build(story)
     buffer.seek(0)
     return buffer
@@ -235,40 +214,40 @@ def main():
     if 'cost_biomass' not in st.session_state: 
         st.session_state.update({'cost_biomass': 30.0, 'cost_energy': 0.15, 'price_char': 1.20})
 
-    # --- Sidebar ---
+    # Sidebar
     with st.sidebar:
-        st.markdown("""<div class="header-box"><h1>CHEMISCO</h1><p>PRO SIMULATOR</p></div>""", unsafe_allow_html=True)
-        st.header("⚙️ Simulation Inputs")
+        st.markdown("""<div class="header-box"><h1>CHEMISCO</h1><p>TORREFACTION SIM</p></div>""", unsafe_allow_html=True)
+        st.header("⚙️ Inputs")
         reactor = st.selectbox("Reactor Type", ["Rotary Drum", "Fluidized Bed", "Screw Reactor"])
         
-        with st.expander("🌲 Feedstock Properties", expanded=True):
+        with st.expander("🌲 Feedstock", expanded=True):
             mass = st.number_input("Mass (kg)", 1.0, 10000.0, 100.0, 10.0)
             moisture = st.slider("Moisture (%)", 0.0, 60.0, 15.0)
-            ash = st.slider("Ash (Dry Basis %)", 0.0, 30.0, 5.0)
+            ash = st.slider("Ash (Dry %)", 0.0, 30.0, 5.0)
             
-        with st.expander("🔥 Process Conditions", expanded=True):
+        with st.expander("🔥 Process", expanded=True):
             temp = st.slider("Temp (°C)", 150, 350, 275)
             time_min = st.slider("Time (min)", 10, 120, 30)
 
-        with st.expander("🔧 Model Constants", expanded=False):
-            p_kf = st.number_input("Drying rate (k_f)", 0.0, 0.1, 0.02, format="%.3f")
-            p_Coil = st.number_input("Max Oil frac (C_oil)", 0.0, 0.5, 0.25)
-            p_Cgas = st.number_input("Max Gas frac (C_gas)", 0.0, 0.5, 0.20)
-            p_a = st.number_input("Solid Yield Factor (a)", 0.1, 0.5, 0.35)
-            p_b = st.number_input("Degradation (b)", 0.001, 0.01, 0.004, format="%.4f")
+        with st.expander("🔧 Model Params", expanded=False):
+            p_kf = st.number_input("Drying rate", 0.0, 0.1, 0.02)
+            p_Coil = st.number_input("Max Oil frac", 0.0, 0.5, 0.25)
+            p_Cgas = st.number_input("Max Gas frac", 0.0, 0.5, 0.20)
+            p_a = st.number_input("Solid Yield Factor", 0.1, 0.5, 0.35)
+            p_b = st.number_input("Degradation", 0.001, 0.01, 0.004, format="%.4f")
             st.markdown("---")
             p_enh = st.slider("Energy Factor", 0.2, 1.5, 0.85)
             
         params = {"k_f": p_kf, "C_oil": p_Coil, "C_gas": p_Cgas, "a_solid": p_a, "b_solid": p_b, "energy_factor": p_enh}
 
-        with st.expander("💰 Economic Factors", expanded=False):
+        with st.expander("💰 Economics", expanded=False):
             st.session_state.cost_biomass = st.number_input("Feed ($/ton)", value=st.session_state.cost_biomass)
             st.session_state.cost_energy = st.number_input("Energy ($/kWh)", value=st.session_state.cost_energy)
             st.session_state.price_char = st.number_input("Char Price ($/kg)", value=st.session_state.price_char)
         
         game_mode = st.checkbox("🎮 Optimization Challenge")
 
-    # --- Calculations ---
+    # Calculations
     res = run_simulation(mass, moisture, ash, temp, time_min, params)
     cost_feed = (mass / 1000) * st.session_state.cost_biomass
     energy_kwh = res['Q_total_kJ'] / 3600.0
@@ -276,15 +255,19 @@ def main():
     revenue = res['char_kg'] * st.session_state.price_char
     profit = revenue - (cost_feed + cost_ops)
 
-    # --- Prepare Charts for Display & PDF ---
+    # Visualization Setup
+    # Force Black Text for App Visibility
+    APP_TXT_COLOR = "#000000"
+    APP_BG_COLOR = "#f4f6f9"
+    colors_seq = ["#1a3c34", "#5c6bc0", "#ffa726", "#ef5350"]
+
     # 1. Pie Chart
     df_pie = pd.DataFrame({
         "Component": ["Biochar", "Water Vapor", "Bio-Oil", "Gases"],
         "Mass (kg)": [res['char_kg'], res['water_evap_kg'], res['oil_kg'], res['gas_kg']]
     })
-    colors_seq = ["#1a3c34", "#5c6bc0", "#ffa726", "#ef5350"]
     fig1 = px.pie(df_pie, values='Mass (kg)', names='Component', hole=0.5, color_discrete_sequence=colors_seq, title="Mass Balance")
-    fig1.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#37474f'))
+    fig1.update_layout(paper_bgcolor=APP_BG_COLOR, plot_bgcolor=APP_BG_COLOR, font=dict(color=APP_TXT_COLOR, size=14))
 
     # 2. Bar Chart
     organic_char = res['char_kg'] - res['ash_kg']
@@ -293,9 +276,14 @@ def main():
         "Mass (kg)": [organic_char, res['ash_kg']]
     })
     fig2 = px.bar(df_bar, x='Type', y='Mass (kg)', color='Type', color_discrete_sequence=['#1a3c34', '#b0bec5'], title="Solid Composition")
-    fig2.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#37474f'), showlegend=False)
+    fig2.update_layout(
+        paper_bgcolor=APP_BG_COLOR, plot_bgcolor=APP_BG_COLOR, font=dict(color=APP_TXT_COLOR, size=14),
+        xaxis=dict(title_font=dict(color=APP_TXT_COLOR), tickfont=dict(color=APP_TXT_COLOR)),
+        yaxis=dict(title_font=dict(color=APP_TXT_COLOR), tickfont=dict(color=APP_TXT_COLOR)),
+        showlegend=False
+    )
 
-    # --- Dashboard View ---
+    # Dashboard
     st.title("CHEMISCO: Process Dashboard")
     st.markdown("---")
     
@@ -314,7 +302,6 @@ def main():
     k4.metric("Est. Profit", f"${profit:.2f}", f"Energy Cost: ${cost_ops:.2f}")
     st.markdown("---")
 
-    # --- Tabs ---
     t1, t2, t3, t4 = st.tabs(["📊 Analytics", "📈 Kinetics", "📄 Export", "🎯 Challenge"])
     
     with t1:
@@ -329,32 +316,36 @@ def main():
         fig_area.add_trace(go.Scatter(x=df_time['Time (min)'], y=df_time['Bio-Oil (kg)'], stackgroup='one', name='Bio-Oil', line=dict(width=0, color='#ffa726')))
         fig_area.add_trace(go.Scatter(x=df_time['Time (min)'], y=df_time['Gases (kg)'], stackgroup='one', name='Gases', line=dict(width=0, color='#ef5350')))
         fig_area.add_trace(go.Scatter(x=df_time['Time (min)'], y=df_time['Water Vapor (kg)'], stackgroup='one', name='Water Vapor', line=dict(width=0, color='#5c6bc0')))
-        fig_area.update_layout(paper_bgcolor='#f4f6f9', plot_bgcolor='#f4f6f9', title="Product Evolution", font=dict(color='#37474f'))
+        fig_area.update_layout(
+            paper_bgcolor=APP_BG_COLOR, plot_bgcolor=APP_BG_COLOR, title="Product Evolution", 
+            font=dict(color=APP_TXT_COLOR), # FORCE BLACK TEXT
+            xaxis=dict(title="Time (min)", tickfont=dict(color="black"), title_font=dict(color="black")),
+            yaxis=dict(title="Mass (kg)", tickfont=dict(color="black"), title_font=dict(color="black"))
+        )
         st.plotly_chart(fig_area, use_container_width=True)
 
     with t3:
         st.markdown("### 📄 Professional Report Generation")
-        st.write("Generate a full PDF report including charts, timestamp, and company branding.")
-        
-        pdf = create_pdf(res, profit, fig1, fig2)
-        st.download_button("Download PDF Report", pdf, f"Chemisco_Report_{datetime.now().strftime('%Y%m%d')}.pdf", "application/pdf")
+        try:
+            import kaleido
+            pdf = create_pdf(res, profit, fig1, fig2)
+            st.download_button("Download PDF Report", pdf, f"Chemisco_Report.pdf", "application/pdf")
+        except ImportError:
+            st.error("⚠️ Library Missing: Please install 'kaleido==0.2.1' to generate charts.")
+            st.code("pip install kaleido==0.2.1", language="bash")
 
     with t4:
         if game_mode:
             TARGET_HHV, MIN_YIELD, TARGET_PROFIT = 22.0, 55.0, 0.0
             st.markdown("### 🎯 Engineering Challenge"); st.markdown("---")
             col_g1, col_g2, col_g3 = st.columns(3)
-            
             delta_hhv = res['hhv_final'] - TARGET_HHV
             col_g1.metric("HHV (>22)", f"{res['hhv_final']:.2f}", f"{delta_hhv:.2f}", delta_color="normal" if res['hhv_final'] >= TARGET_HHV else "inverse")
-            
             delta_yield = res['mass_yield_pct'] - MIN_YIELD
             col_g2.metric("Yield (>55%)", f"{res['mass_yield_pct']:.1f}%", f"{delta_yield:.1f}%", delta_color="normal" if res['mass_yield_pct'] >= MIN_YIELD else "inverse")
-            
             col_g3.metric("Profit (>$0)", f"${profit:.2f}", "Net", delta_color="normal" if profit > 0 else "inverse")
-            
             if res['hhv_final'] >= TARGET_HHV and res['mass_yield_pct'] >= MIN_YIELD and profit > TARGET_PROFIT:
-                st.balloons(); st.success("🏆 Success! Engineering Sweet Spot Found.")
+                st.balloons(); st.success("🏆 Success!")
             else:
                 st.warning("Optimization Failed. Adjust Temp/Time.")
         else:
