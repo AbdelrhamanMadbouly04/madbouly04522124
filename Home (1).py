@@ -83,7 +83,8 @@ GLOBAL_CSS = """
     
     .streamlit-expanderHeader { color: #ffffff !important; background-color: #4a090e !important; border-radius: 5px; }
 
-    #MainMenu, footer, header, .stDeployButton {visibility: hidden;}
+    /* --- FIX: Removed 'header' from hidden list so toggle button works --- */
+    #MainMenu, footer, .stDeployButton {visibility: hidden;}
 </style>
 """
 
@@ -216,7 +217,7 @@ def main():
     st.set_page_config(page_title="Chemisco Pro", layout="wide", initial_sidebar_state="expanded")
     st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
     
-    # Botpress Inject (Optional - kept from original)
+    # Botpress Inject
     js_code = """<script>if(!window.parent.document.getElementById('botpress-inject')){var s=window.parent.document.createElement('script');s.id='botpress-inject';s.src='https://cdn.botpress.cloud/webchat/v3.4/inject.js';window.parent.document.head.appendChild(s);s.onload=function(){var s2=window.parent.document.createElement('script');s2.src='https://files.bpcontent.cloud/2025/11/28/23/20251128230307-F5JAD1ML.js';s2.defer=true;window.parent.document.body.appendChild(s2);}}</script>"""
     components.html(js_code, height=0, width=0)
 
