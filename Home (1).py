@@ -31,7 +31,7 @@ GLOBAL_CSS = """
     section[data-testid="stSidebar"] label { color: #e0f2f1 !important; }
     section[data-testid="stSidebar"] .stMarkdown, section[data-testid="stSidebar"] p { color: #b2dfdb !important; }
 
-    /* Text Colors - High Contrast */
+    /* Text Colors */
     h1, h2, h3 { color: #1a3c34 !important; font-weight: 700; }
     .stMarkdown, p, div, span, li { color: #2c3e50; }
 
@@ -58,14 +58,17 @@ GLOBAL_CSS = """
     }
     .bfd-stream { color: #1a3c34; font-size: 24px; padding-top: 10px; font-weight: bold; }
 
-    /* Sidebar Header - Clean Look */
+    /* Sidebar Header - Logo Box Style */
     .header-box {
-        background: transparent; 
-        border: 2px solid rgba(255, 255, 255, 0.2);
-        padding: 20px; border-radius: 10px; text-align: center; margin-bottom: 25px;
+        background-color: #2e7d32; /* A lighter green box */
+        padding: 15px; 
+        border-radius: 8px; 
+        text-align: center; 
+        margin-bottom: 25px;
+        border: 1px solid #4caf50;
     }
-    .header-box h1 { color: #ffffff !important; margin: 0; font-size: 2rem; text-shadow: 0 2px 4px rgba(0,0,0,0.2); }
-    .header-box p { color: #a7ffeb !important; margin: 0; font-size: 1rem; font-weight: 500; }
+    .header-box h1 { color: #ffffff !important; margin: 0; font-size: 1.8rem; font-weight: 800; letter-spacing: 2px; }
+    .header-box p { color: #e8f5e9 !important; margin: 0; font-size: 0.9rem; margin-top: 5px; }
 
     /* Tabs */
     div[data-testid="stTabs"] button { color: #546e7a; font-weight: 600; }
@@ -142,32 +145,64 @@ def get_time_series(mass_in, moisture_pct, ash_pct_dry, temp_c, time_min, params
         })
     return pd.DataFrame(data)
 
-# --- 4. Professional PDF Generator ---
+# --- 4. Professional PDF Generator (With LOGO Simulation) ---
 def create_pdf(res, profit, fig1, fig2):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter)
     styles = getSampleStyleSheet()
     story = []
     
+    # Theme Color
     CHEMISCO_GREEN = colors.HexColor('#1a3c34')
+    LOGO_BLUE_GREEN = colors.HexColor('#2e7d32') # Matching the Sidebar Header Box
+    
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    # --- 1. Header with "CHEMISCO BOX" Logo Simulation ---
+    # We create a Table specifically to look like the logo box
+    logo_style = ParagraphStyle(name='LogoText', fontName='Helvetica-Bold', fontSize=18, textColor=colors.white, alignment=1)
+    sub_logo_style = ParagraphStyle(name='SubLogo', fontName='Helvetica', fontSize=8, textColor=colors.whitesmoke, alignment=1)
     
-    # Header
-    header_data = [
-        [Paragraph("<b>CHEMISCO</b><br/><font size=10 color=grey>Bio-Engineering Solutions</font>", styles['Title']),
-         Paragraph(f"<font size=10><b>Date:</b> {current_time}</font>", styles['Normal'])]
+    # The Logo "Box" Content
+    logo_content = [
+        [Paragraph("CHEMISCO", logo_style)],
+        [Paragraph("Torrefaction Simulator", sub_logo_style)]
     ]
-    t_head = Table(header_data, colWidths=[4*inch, 3*inch])
-    t_head.setStyle(TableStyle([('ALIGN', (0,0), (0,0), 'LEFT'), ('ALIGN', (1,0), (1,0), 'RIGHT'), ('VALIGN', (0,0), (-1,-1), 'TOP')]))
-    story.append(t_head); story.append(Spacer(1, 20))
     
-    # Title
-    story.append(Paragraph("Process Simulation Technical Report", ParagraphStyle(name='Title', parent=styles['Heading2'], textColor=CHEMISCO_GREEN, fontSize=16)))
+    # Create the Logo Table
+    t_logo = Table(logo_content, colWidths=[2.5*inch])
+    t_logo.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), LOGO_BLUE_GREEN), # The colored box background
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('BOX', (0,0), (-1,-1), 1, colors.white), # White border around text
+        ('TOPPADDING', (0,0), (-1,-1), 6),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+        ('ROUNDEDCORNERS', [8, 8, 8, 8]) # Attempt rounded corners (supported in newer reportlab) or just standard box
+    ]))
+
+    # Info Text (Date)
+    info_text = Paragraph(f"<b>Date:</b> {current_time}<br/><b>Status:</b> Success", styles['Normal'])
+
+    # Main Header Table (Logo on Left, Info on Right)
+    header_layout = [[t_logo, info_text]]
+    t_header_main = Table(header_layout, colWidths=[3*inch, 3*inch])
+    t_header_main.setStyle(TableStyle([
+        ('ALIGN', (0,0), (0,0), 'LEFT'),
+        ('ALIGN', (1,0), (1,0), 'RIGHT'),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+    ]))
+    
+    story.append(t_header_main)
+    story.append(Spacer(1, 25))
+    
+    # --- 2. Report Title ---
+    story.append(Paragraph("Technical Engineering Report", ParagraphStyle(name='Title', parent=styles['Heading2'], textColor=CHEMISCO_GREEN, fontSize=16)))
     story.append(Spacer(1, 10))
-    story.append(Paragraph("This report outlines the mass and energy balance results for the specified torrefaction process parameters.", styles['Normal']))
+    story.append(Paragraph("This document summarizes the simulation results for the biomass torrefaction process based on the current input parameters.", styles['Normal']))
     story.append(Spacer(1, 20))
 
-    # Metrics
+    # --- 3. Key Metrics Table ---
     data = [
         ["Metric", "Value"], 
         ["Mass Yield", f"{res['mass_yield_pct']:.1f} %"], 
@@ -185,23 +220,30 @@ def create_pdf(res, profit, fig1, fig2):
     ]))
     story.append(t); story.append(Spacer(1, 30))
 
-    # Charts Helper
+    # --- 4. Charts Integration ---
     def add_plot(fig, title):
         try:
-            # FORCE White Background for PDF Clarity
+            # Force White Background for Print
             fig.update_layout(paper_bgcolor="white", plot_bgcolor="white", font=dict(color="black"))
-            img_bytes = fig.to_image(format="png", width=600, height=350, scale=2)
+            # High-res image generation
+            img_bytes = fig.to_image(format="png", width=800, height=450, scale=2)
+            
             story.append(Paragraph(f"<b>{title}</b>", styles['Heading3']))
             story.append(Image(BytesIO(img_bytes), width=6*inch, height=3.5*inch))
             story.append(Spacer(1, 20))
-        except Exception:
-            story.append(Paragraph(f"<i>Chart '{title}' could not be rendered. Ensure 'kaleido==0.2.1' is installed.</i>", styles['Normal']))
+        except Exception as e:
+            # Fallback if Kaleido fails
+            story.append(Paragraph(f"<font color=red>Error rendering chart: {str(e)}</font>", styles['Normal']))
+            story.append(Paragraph("<i>Please ensure 'kaleido==0.2.1' is installed in requirements.txt</i>", styles['Normal']))
+            story.append(Spacer(1, 10))
 
     add_plot(fig1, "Figure 1: Mass Balance Distribution")
     add_plot(fig2, "Figure 2: Solid Composition")
     
+    # --- 5. Footer ---
     story.append(Spacer(1, 30))
-    story.append(Paragraph("<font color=grey size=8>Chemisco Simulator v3.1 | Confidential</font>", styles['Normal']))
+    story.append(Paragraph("<font color=grey size=8>Chemisco Simulator v3.2 | Confidential & Proprietary</font>", styles['Normal']))
+
     doc.build(story)
     buffer.seek(0)
     return buffer
@@ -216,7 +258,14 @@ def main():
 
     # Sidebar
     with st.sidebar:
-        st.markdown("""<div class="header-box"><h1>CHEMISCO</h1><p>TORREFACTION SIM</p></div>""", unsafe_allow_html=True)
+        # UPDATED: Sidebar Header matching PDF Logo Logic
+        st.markdown("""
+            <div class="header-box">
+                <h1>CHEMISCO</h1>
+                <p>TORREFACTION SIMULATOR</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
         st.header("⚙️ Inputs")
         reactor = st.selectbox("Reactor Type", ["Rotary Drum", "Fluidized Bed", "Screw Reactor"])
         
@@ -255,8 +304,7 @@ def main():
     revenue = res['char_kg'] * st.session_state.price_char
     profit = revenue - (cost_feed + cost_ops)
 
-    # Visualization Setup
-    # Force Black Text for App Visibility
+    # Visualization
     APP_TXT_COLOR = "#000000"
     APP_BG_COLOR = "#f4f6f9"
     colors_seq = ["#1a3c34", "#5c6bc0", "#ffa726", "#ef5350"]
@@ -318,7 +366,7 @@ def main():
         fig_area.add_trace(go.Scatter(x=df_time['Time (min)'], y=df_time['Water Vapor (kg)'], stackgroup='one', name='Water Vapor', line=dict(width=0, color='#5c6bc0')))
         fig_area.update_layout(
             paper_bgcolor=APP_BG_COLOR, plot_bgcolor=APP_BG_COLOR, title="Product Evolution", 
-            font=dict(color=APP_TXT_COLOR), # FORCE BLACK TEXT
+            font=dict(color=APP_TXT_COLOR),
             xaxis=dict(title="Time (min)", tickfont=dict(color="black"), title_font=dict(color="black")),
             yaxis=dict(title="Mass (kg)", tickfont=dict(color="black"), title_font=dict(color="black"))
         )
@@ -331,8 +379,7 @@ def main():
             pdf = create_pdf(res, profit, fig1, fig2)
             st.download_button("Download PDF Report", pdf, f"Chemisco_Report.pdf", "application/pdf")
         except ImportError:
-            st.error("⚠️ Library Missing: Please install 'kaleido==0.2.1' to generate charts.")
-            st.code("pip install kaleido==0.2.1", language="bash")
+            st.error("⚠️ Library Missing: Please ensure 'kaleido==0.2.1' is in requirements.txt")
 
     with t4:
         if game_mode:
