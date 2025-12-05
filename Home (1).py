@@ -24,7 +24,7 @@ GLOBAL_CSS = """
 <style>
     .stApp { background-color: #f4f6f9; font-family: 'Segoe UI', sans-serif; }
     
-    /* Sidebar - Professional Dark Teal */
+    /* Sidebar */
     section[data-testid="stSidebar"] { background-color: #1a3c34; color: #ffffff; }
     section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2, 
     section[data-testid="stSidebar"] label { color: #e0f2f1 !important; }
@@ -148,7 +148,7 @@ def create_pdf(res, profit, fig1, fig2):
     # --- 1. Header (Company & Time) ---
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    # Create a table for the header to align text left and right
+    # Logo / Company Name
     header_data = [
         [Paragraph("<b>CHEMISCO</b><br/><font size=10 color=grey>Bio-Engineering Solutions</font>", styles['Title']),
          Paragraph(f"<font size=10><b>Generated on:</b><br/>{current_time}</font>", styles['Normal'])]
@@ -192,10 +192,17 @@ def create_pdf(res, profit, fig1, fig2):
     story.append(Spacer(1, 30))
 
     # --- 4. Charts Integration ---
-    # Helper to convert plotly fig to reportlab image
     def add_plot_to_story(fig, title):
         try:
-            # Convert Plotly fig to image bytes (requires kaleido)
+            # IMPORTANT: Force White Background for Print
+            # This ensures charts look good on paper regardless of the app theme
+            fig.update_layout(
+                paper_bgcolor="white", 
+                plot_bgcolor="white",
+                font=dict(color="black")
+            )
+            
+            # Convert Plotly fig to image bytes
             img_bytes = fig.to_image(format="png", width=600, height=350, scale=2)
             img_buffer = BytesIO(img_bytes)
             img = Image(img_buffer, width=6*inch, height=3.5*inch)
@@ -205,7 +212,8 @@ def create_pdf(res, profit, fig1, fig2):
             story.append(img)
             story.append(Spacer(1, 20))
         except Exception as e:
-            story.append(Paragraph(f"<i>Could not render chart: {title}. Ensure 'kaleido' is installed.</i>", styles['Normal']))
+            # Fallback message if kaleido is still missing
+            story.append(Paragraph(f"<i>Chart could not be rendered. Error: {str(e)}</i>", styles['Normal']))
             story.append(Spacer(1, 20))
 
     add_plot_to_story(fig1, "Figure 1: Mass Balance Distribution")
@@ -328,14 +336,8 @@ def main():
         st.markdown("### 📄 Professional Report Generation")
         st.write("Generate a full PDF report including charts, timestamp, and company branding.")
         
-        # Check if kaleido is installed for image export
-        try:
-            import kaleido
-            pdf = create_pdf(res, profit, fig1, fig2)
-            st.download_button("Download PDF Report", pdf, f"Chemisco_Report_{datetime.now().strftime('%Y%m%d')}.pdf", "application/pdf")
-        except ImportError:
-            st.error("⚠️ Library Missing: Please install 'kaleido' to generate charts in PDF.")
-            st.code("pip install -U kaleido", language="bash")
+        pdf = create_pdf(res, profit, fig1, fig2)
+        st.download_button("Download PDF Report", pdf, f"Chemisco_Report_{datetime.now().strftime('%Y%m%d')}.pdf", "application/pdf")
 
     with t4:
         if game_mode:
