@@ -19,37 +19,35 @@ H_VAPOR = 2260000.0  # J/kg (Latent heat)
 TEMP_REF_K = 298.15
 HHV_DRY_INITIAL_DEFAULT = 18.0 # MJ/kg
 
-# --- 2. Styles (All Black Text) ---
+# --- 2. Styles (Green & Light Gray) ---
 GLOBAL_CSS = """
 <style>
-    /* Theme: Light Mode (All Text Black) */
-    .stApp { background-color: #e9e9e9; color: #000000; font-family: 'Segoe UI', sans-serif; }
+    /* Theme: Green & Light Gray */
+    .stApp { background-color: #e9e9e9; color: #1a1a1a; font-family: 'Segoe UI', sans-serif; }
     
-    /* Headings - Dark Green */
+    /* Headings */
     h1, h2, h3, h4, h5, h6 { color: #00743c !important; }
     
-    /* General Text - Black */
-    .stMarkdown, p, label, li, span { color: #000000 !important; }
+    /* General Text */
+    .stMarkdown, p, label, li { color: #333333 !important; }
     
-    /* Sidebar (Very Light Green Background for Black Text) */
-    section[data-testid="stSidebar"] { background-color: #e8f5e9; border-right: 2px solid #00743c; }
-    
-    /* Force all sidebar text to Black */
-    section[data-testid="stSidebar"] * { color: #000000 !important; }
+    /* Sidebar (Green Background) */
+    section[data-testid="stSidebar"] { background-color: #00743c; }
     section[data-testid="stSidebar"] h1, 
-    section[data-testid="stSidebar"] h2 { color: #00743c !important; } /* Keep headers Green */
+    section[data-testid="stSidebar"] h2, 
+    section[data-testid="stSidebar"] label, 
+    section[data-testid="stSidebar"] p { color: #ffffff !important; }
     
-    /* Inputs */
-    .stSlider > div > div > div > div { background-color: #00743c !important; }
-    .stSelectbox > div > div { color: #000000 !important; }
-    div[data-baseweb="select"] > div { background-color: #ffffff !important; color: #000000 !important; }
+    /* Inputs in Sidebar */
+    .stSlider > div > div > div > div { background-color: #ffffff !important; }
+    .stSelectbox > div > div { color: #ffffff; }
 
-    /* Metrics (Cards) */
+    /* Metrics (Cards) - White bg on Light Gray */
     div[data-testid="stMetric"] {
         background-color: #ffffff; 
         border: 2px solid #00743c;
         border-radius: 8px; padding: 10px; 
-        box-shadow: 0px 4px 10px rgba(0, 116, 60, 0.1);
+        box-shadow: 0px 4px 10px rgba(0, 116, 60, 0.2);
     }
     div[data-testid="stMetricValue"] { color: #000000 !important; font-size: 24px !important; }
     div[data-testid="stMetricLabel"] { color: #00743c !important; font-size: 14px !important; font-weight: bold; }
@@ -61,37 +59,28 @@ GLOBAL_CSS = """
         margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     }
     .header-box h1 { color: #00743c !important; margin: 0; }
-    .header-box p { color: #000000 !important; margin: 0; }
+    .header-box p { color: #666666 !important; margin: 0; }
 
     /* Tabs */
-    div[data-testid="stTabs"] button { color: #000000 !important; font-weight: bold; background: transparent !important; }
+    div[data-testid="stTabs"] button { color: #555555 !important; font-weight: bold; background: transparent !important; }
     div[data-testid="stTabs"] button[aria-selected="true"] { color: #00743c !important; border-bottom: 3px solid #00743c !important; }
     
-    /* Buttons (White BG, Green Border, Black Text) */
-    .stButton > button { 
-        background-color: #ffffff !important; 
-        color: #000000 !important; 
-        border: 2px solid #00743c; 
-        border-radius: 6px; 
-        font-weight: bold;
-    }
-    .stButton > button:hover { 
-        background-color: #c8e6c9 !important; /* Light Green on Hover */
-        border-color: #005a2e;
-    }
+    /* Buttons */
+    .stButton > button { background-color: #00743c !important; color: #ffffff !important; border: none; border-radius: 6px; }
+    .stButton > button:hover { background-color: #005a2e !important; }
 
     /* Flow Visualization Blocks */
     .bfd-block {
         padding: 10px; border-radius: 8px; text-align: center; 
-        background: #ffffff; 
+        background: #ffffff; /* White Block */
         border: 2px solid #00743c; 
-        color: #000000; font-weight: bold; font-size: 0.9em;
+        color: #333333; font-weight: bold; font-size: 0.9em;
         box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
     .bfd-stream { color: #00743c; font-size: 20px; padding-top: 10px; text-align: center; font-weight: bold; }
     
     /* Expander Header */
-    .streamlit-expanderHeader { color: #000000 !important; background-color: #ffffff !important; border: 1px solid #cccccc; border-radius: 5px; }
+    .streamlit-expanderHeader { color: #000000 !important; background-color: #f0f0f0 !important; border-radius: 5px; }
 
     /* Hide Hamburger Menu & Footer */
     #MainMenu, footer, .stDeployButton {visibility: hidden;}
@@ -101,25 +90,30 @@ GLOBAL_CSS = """
 # --- 3. Mathematical Models ---
 
 def moisture_evap_linear(initial_moisture_kg, T_C, t_min, k_f=0.02):
+    """(A) Linear moisture evaporation"""
     if T_C <= 100:
         return 0.0
     evap_kg = k_f * (T_C - 100) * t_min * initial_moisture_kg
     return min(initial_moisture_kg, max(0.0, evap_kg))
 
 def Y_solid_empirical(T_C, t_min, a=0.35, b=0.004):
+    """(C) Solid Yield Model"""
     severity = max(0.0, T_C - 200) * t_min
     expo = math.exp(-b * severity)
     return 1.0 - a * (1.0 - expo)
 
 def m_oil(dry_mass_kg, T_C, t_min, C_oil=0.25):
+    """(D) Bio-oil production"""
     k_oil = 0.0008 * max(0.0, T_C - 200)
     return dry_mass_kg * C_oil * (1.0 - math.exp(-k_oil * t_min))
 
 def m_gas(dry_mass_kg, T_C, t_min, C_gas=0.20):
+    """(D) Gas production"""
     k_gas = 0.0015 * max(0.0, T_C - 180)
     return dry_mass_kg * C_gas * (1.0 - math.exp(-k_gas * t_min))
 
 def hhv_improved_model(Y_solid, temp_c, enhancement_factor=0.85):
+    """(F) Improved HHV Model"""
     mass_loss_fraction = 1.0 - Y_solid
     base_increase = mass_loss_fraction * enhancement_factor
     temp_bonus = 0.0
@@ -203,11 +197,10 @@ def create_pdf(res, profit):
         ["Profit Est.", f"${profit:.2f}"]
     ]
     t = Table(data, colWidths=[200, 200])
-    # Changed Table Header: Light Green Background, Black Text
-    t.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor('#a5d6a7')), 
-                           ('TEXTCOLOR', (0,0), (-1,0), colors.black), 
-                           ('GRID', (0,0), (-1,-1), 1, colors.black),
-                           ('TEXTCOLOR', (0,1), (-1,-1), colors.black)]))
+    # Changed table color to Green to match theme
+    t.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor('#00743c')), 
+                           ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke), 
+                           ('GRID', (0,0), (-1,-1), 1, colors.black)]))
     story.append(t)
     doc.build(story)
     buffer.seek(0)
@@ -289,8 +282,10 @@ def main():
     # --- Tabs ---
     t1, t2, t3, t4 = st.tabs(["📊 Charts", "📈 Time Analysis", "📄 Report", "🎮 Game"])
     
-    plot_bg = '#e9e9e9'
+    # Update Plot Styles for Light Theme
+    plot_bg = '#e9e9e9' # Light Gray
     txt_col = '#000000' # Black
+    # Update colors: Green for Char, Blue for Water
     colors_seq = ["#00743c", "#3498db", "#e67e22", "#e74c3c"] 
     
     with t1:
