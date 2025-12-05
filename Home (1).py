@@ -19,55 +19,75 @@ H_VAPOR = 2260000.0  # J/kg (Latent heat)
 TEMP_REF_K = 298.15
 HHV_DRY_INITIAL_DEFAULT = 18.0 # MJ/kg
 
-# --- 2. Styles (Black & Burgundy) ---
+# --- 2. Styles (Green & Light Gray) ---
 GLOBAL_CSS = """
 <style>
-    /* Theme: Black & Burgundy */
-    .stApp { background-color: #000000; color: #f0f0f0; font-family: 'Segoe UI', sans-serif; }
-    h1, h2, h3, h4, h5, h6 { color: #ffffff !important; }
-    .stMarkdown, p, label { color: #e0e0e0 !important; }
+    /* Theme: Green & Light Gray */
+    .stApp { background-color: #e9e9e9; color: #1a1a1a; font-family: 'Segoe UI', sans-serif; }
     
-    section[data-testid="stSidebar"] { background-color: #640d14; }
-    section[data-testid="stSidebar"] * { color: #ffffff !important; }
+    /* Headings */
+    h1, h2, h3, h4, h5, h6 { color: #00743c !important; }
     
-    .stSlider > div > div > div > div { background-color: #640d14 !important; }
+    /* General Text */
+    .stMarkdown, p, label, li { color: #333333 !important; }
+    
+    /* Sidebar (Green Background) */
+    section[data-testid="stSidebar"] { background-color: #00743c; }
+    section[data-testid="stSidebar"] h1, 
+    section[data-testid="stSidebar"] h2, 
+    section[data-testid="stSidebar"] label, 
+    section[data-testid="stSidebar"] p { color: #ffffff !important; }
+    
+    /* Inputs in Sidebar */
+    .stSlider > div > div > div > div { background-color: #ffffff !important; }
     .stSelectbox > div > div { color: #ffffff; }
 
+    /* Metrics (Cards) - White bg on Light Gray */
     div[data-testid="stMetric"] {
-        background-color: #121212; border: 2px solid #640d14;
-        border-radius: 8px; padding: 10px; box-shadow: 0px 4px 10px rgba(100, 13, 20, 0.4);
+        background-color: #ffffff; 
+        border: 2px solid #00743c;
+        border-radius: 8px; padding: 10px; 
+        box-shadow: 0px 4px 10px rgba(0, 116, 60, 0.2);
     }
-    div[data-testid="stMetricValue"] { color: #ffffff !important; font-size: 24px !important; }
-    div[data-testid="stMetricLabel"] { color: #d97584 !important; font-size: 14px !important; }
+    div[data-testid="stMetricValue"] { color: #000000 !important; font-size: 24px !important; }
+    div[data-testid="stMetricLabel"] { color: #00743c !important; font-size: 14px !important; font-weight: bold; }
 
+    /* Header Box */
     .header-box {
-        background: #000000; border: 1px solid #640d14; padding: 20px;
-        border-radius: 10px; color: #ffffff; text-align: center;
-        margin-bottom: 20px; box-shadow: 0 4px 6px rgba(100, 13, 20, 0.3);
+        background: #ffffff; border: 2px solid #00743c; padding: 20px;
+        border-radius: 10px; text-align: center;
+        margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     }
-    .header-box h1 { color: #ffffff !important; margin: 0; }
-    .header-box p { color: #cccccc !important; margin: 0; }
+    .header-box h1 { color: #00743c !important; margin: 0; }
+    .header-box p { color: #666666 !important; margin: 0; }
 
-    div[data-testid="stTabs"] button { color: #cccccc !important; font-weight: bold; background: transparent !important; }
-    div[data-testid="stTabs"] button[aria-selected="true"] { color: #ffffff !important; border-bottom: 3px solid #640d14 !important; }
+    /* Tabs */
+    div[data-testid="stTabs"] button { color: #555555 !important; font-weight: bold; background: transparent !important; }
+    div[data-testid="stTabs"] button[aria-selected="true"] { color: #00743c !important; border-bottom: 3px solid #00743c !important; }
     
-    .stButton > button { background-color: #640d14 !important; color: #ffffff !important; border: 1px solid #801119; border-radius: 6px; }
-    .stButton > button:hover { background-color: #801119 !important; }
+    /* Buttons */
+    .stButton > button { background-color: #00743c !important; color: #ffffff !important; border: none; border-radius: 6px; }
+    .stButton > button:hover { background-color: #005a2e !important; }
 
+    /* Flow Visualization Blocks */
     .bfd-block {
-        padding: 10px; border-radius: 8px; text-align: center; background: #121212;
-        border: 1px solid #640d14; color: #ffffff; font-weight: bold; font-size: 0.9em;
+        padding: 10px; border-radius: 8px; text-align: center; 
+        background: #ffffff; /* White Block */
+        border: 2px solid #00743c; 
+        color: #333333; font-weight: bold; font-size: 0.9em;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
-    .bfd-stream { color: #640d14; font-size: 20px; padding-top: 10px; text-align: center; }
+    .bfd-stream { color: #00743c; font-size: 20px; padding-top: 10px; text-align: center; font-weight: bold; }
     
-    .streamlit-expanderHeader { color: #ffffff !important; background-color: #4a090e !important; border-radius: 5px; }
+    /* Expander Header */
+    .streamlit-expanderHeader { color: #000000 !important; background-color: #f0f0f0 !important; border-radius: 5px; }
 
-    /* Hide Hamburger Menu & Footer only - Header stays visible for sidebar toggle */
+    /* Hide Hamburger Menu & Footer */
     #MainMenu, footer, .stDeployButton {visibility: hidden;}
 </style>
 """
 
-# --- 3. Mathematical Models (Updated Logic) ---
+# --- 3. Mathematical Models ---
 
 def moisture_evap_linear(initial_moisture_kg, T_C, t_min, k_f=0.02):
     """(A) Linear moisture evaporation"""
@@ -93,20 +113,12 @@ def m_gas(dry_mass_kg, T_C, t_min, C_gas=0.20):
     return dry_mass_kg * C_gas * (1.0 - math.exp(-k_gas * t_min))
 
 def hhv_improved_model(Y_solid, temp_c, enhancement_factor=0.85):
-    """
-    (F) Improved HHV Model
-    Calculates energy density increase based on mass loss + thermal carbonization.
-    """
+    """(F) Improved HHV Model"""
     mass_loss_fraction = 1.0 - Y_solid
-    
-    # Base increase from volatile loss
     base_increase = mass_loss_fraction * enhancement_factor
-    
-    # Thermal Bonus (Carbonization effect > 280C)
     temp_bonus = 0.0
     if temp_c > 280:
         temp_bonus = 0.02 * ((temp_c - 280) / 50.0)
-        
     return base_increase + temp_bonus
 
 def run_simulation(mass_in, moisture_pct, ash_pct_dry, temp_c, time_min, params):
@@ -117,31 +129,24 @@ def run_simulation(mass_in, moisture_pct, ash_pct_dry, temp_c, time_min, params)
     M0_dry = mass_in * (1.0 - moisture_frac)
     M_ash = M0_dry * ash_frac_dry
     
-    # 1. Moisture
     w_evap = moisture_evap_linear(M0_water, temp_c, time_min, k_f=params['k_f'])
     w_remaining = M0_water - w_evap
     
-    # 2. Devolatilization
     oil_kg = m_oil(M0_dry, temp_c, time_min, C_oil=params['C_oil'])
     gas_kg = m_gas(M0_dry, temp_c, time_min, C_gas=params['C_gas'])
     
-    # 3. Mass Balance
     char_dry = max(0, M0_dry - oil_kg - gas_kg) 
     char_total_mass = char_dry + w_remaining
     
-    # 4. Energy (Updated)
     y_solid_val = Y_solid_empirical(temp_c, time_min, a=params['a_solid'], b=params['b_solid'])
-    
-    enh_factor = params.get('energy_factor', 0.85) # New factor
+    enh_factor = params.get('energy_factor', 0.85)
     hhv_inc_frac = hhv_improved_model(y_solid_val, temp_c, enhancement_factor=enh_factor)
-    
     hhv_final = HHV_DRY_INITIAL_DEFAULT * (1.0 + hhv_inc_frac)
     
     energy_in = M0_dry * HHV_DRY_INITIAL_DEFAULT
     energy_out = char_dry * hhv_final
     energy_yield = (energy_out / energy_in) * 100 if energy_in > 0 else 0
     
-    # Thermal Load
     T_K = temp_c + 273.15
     Q_sensible_bio = (M0_dry * CP_BIOMASS * (T_K - TEMP_REF_K)) / 1000 
     Q_sensible_water = (M0_water * CP_WATER * (373.15 - TEMP_REF_K)) / 1000 
@@ -192,7 +197,8 @@ def create_pdf(res, profit):
         ["Profit Est.", f"${profit:.2f}"]
     ]
     t = Table(data, colWidths=[200, 200])
-    t.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor('#640d14')), 
+    # Changed table color to Green to match theme
+    t.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor('#00743c')), 
                            ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke), 
                            ('GRID', (0,0), (-1,-1), 1, colors.black)]))
     story.append(t)
@@ -229,10 +235,8 @@ def main():
             p_Cgas = st.number_input("Max Gas frac (C_gas)", 0.0, 0.5, 0.20)
             p_a = st.number_input("Solid Yield Factor (a)", 0.1, 0.5, 0.35)
             p_b = st.number_input("Degradation (b)", 0.001, 0.01, 0.004, format="%.4f")
-            
             st.markdown("---")
-            st.caption("Energy Density Control")
-            p_enh = st.slider("Energy Factor", 0.2, 1.5, 0.85, help="Controls how fast HHV rises with mass loss.")
+            p_enh = st.slider("Energy Factor", 0.2, 1.5, 0.85)
             
         params = {"k_f": p_kf, "C_oil": p_Coil, "C_gas": p_Cgas, "a_solid": p_a, "b_solid": p_b, "energy_factor": p_enh}
 
@@ -278,9 +282,11 @@ def main():
     # --- Tabs ---
     t1, t2, t3, t4 = st.tabs(["📊 Charts", "📈 Time Analysis", "📄 Report", "🎮 Game"])
     
-    plot_bg = '#000000'
-    txt_col = '#ffffff'
-    colors_seq = ["#2ecc71", "#3498db", "#e67e22", "#e74c3c"] # Char, Water, Oil, Gas
+    # Update Plot Styles for Light Theme
+    plot_bg = '#e9e9e9' # Light Gray
+    txt_col = '#000000' # Black
+    # Update colors: Green for Char, Blue for Water
+    colors_seq = ["#00743c", "#3498db", "#e67e22", "#e74c3c"] 
     
     with t1:
         cc1, cc2 = st.columns(2)
@@ -301,7 +307,7 @@ def main():
                 "Type": ["Organic Carbon", "Ash"],
                 "Mass (kg)": [organic_char, res['ash_kg']]
             })
-            fig2 = px.bar(df_bar, x='Type', y='Mass (kg)', color='Type', color_discrete_sequence=['#2ecc71', '#7f8c8d'])
+            fig2 = px.bar(df_bar, x='Type', y='Mass (kg)', color='Type', color_discrete_sequence=['#00743c', '#7f8c8d'])
             fig2.update_layout(paper_bgcolor=plot_bg, plot_bgcolor=plot_bg, font_color=txt_col, showlegend=False)
             st.plotly_chart(fig2, use_container_width=True)
 
@@ -310,7 +316,7 @@ def main():
         df_time = get_time_series(mass, moisture, ash, temp, time_min, params)
         
         fig_area = go.Figure()
-        fig_area.add_trace(go.Scatter(x=df_time['Time (min)'], y=df_time['Char (kg)'], stackgroup='one', name='Char', line=dict(width=0, color='#2ecc71')))
+        fig_area.add_trace(go.Scatter(x=df_time['Time (min)'], y=df_time['Char (kg)'], stackgroup='one', name='Char', line=dict(width=0, color='#00743c')))
         fig_area.add_trace(go.Scatter(x=df_time['Time (min)'], y=df_time['Bio-Oil (kg)'], stackgroup='one', name='Bio-Oil', line=dict(width=0, color='#e67e22')))
         fig_area.add_trace(go.Scatter(x=df_time['Time (min)'], y=df_time['Gases (kg)'], stackgroup='one', name='Gases', line=dict(width=0, color='#e74c3c')))
         fig_area.add_trace(go.Scatter(x=df_time['Time (min)'], y=df_time['Water Vapor (kg)'], stackgroup='one', name='Water Vapor', line=dict(width=0, color='#3498db')))
@@ -334,18 +340,17 @@ def main():
             **مهمتك كمهندس:** المستثمر عايز منتج مواصفاته عالية (Bio-Coal) وفي نفس الوقت يحقق ربح.
             عشان تكسب لازم تحقق الـ 3 شروط دول في نفس الوقت:
             1.  **الجودة:** كثافة الطاقة (HHV) لازم تكون **أعلى من 22.0 MJ/kg**.
-            2.  **الإنتاجية:** صافي الوزن (Yield) لازم يكون **أعلى من 55%** (متحرقش البضاعة!).
+            2.  **الإنتاجية:** صافي الوزن (Yield) لازم يكون **أعلى من 55%**.
             3.  **الاقتصاد:** لازم تحقق **صافي ربح موجب (> $0)**.
             """)
             
             st.markdown("---")
 
-            # 1. تحديد الأهداف
+            # Goals
             TARGET_HHV = 22.0
             MIN_YIELD = 55.0
             TARGET_PROFIT = 0.0
 
-            # 2. عرض العدادات مقارنة بالهدف
             col_g1, col_g2, col_g3 = st.columns(3)
             
             # HHV Check
@@ -364,7 +369,6 @@ def main():
 
             st.markdown("---")
 
-            # 3. منطق الفوز والخسارة
             success_hhv = res['hhv_final'] >= TARGET_HHV
             success_yield = res['mass_yield_pct'] >= MIN_YIELD
             success_profit = profit > TARGET_PROFIT
@@ -374,18 +378,15 @@ def main():
                 st.success("🏆 **مبــــروك! لقد وجدت التوازن المثالي (The Sweet Spot)**")
                 score = (res['hhv_final'] * res['mass_yield_pct']) + profit
                 st.metric("🌟 Engineering Score", f"{int(score)}")
-                st.caption("السكور بيتحسب بناءً على الجودة والربح مع بعض.")
             else:
                 st.error("❌ **محاولة غير ناجحة.. جرب تاني!**")
-                
-                # تحليل سبب الخسارة (Feedback)
                 st.markdown("#### 💡 نصائح المهندس الاستشاري:")
                 if not success_hhv:
-                    st.warning("🔸 **جودة منخفضة:** المنتج لسه خشب خام. **زود الحرارة أو الوقت** عشان تعلي الـ HHV.")
+                    st.warning("🔸 **جودة منخفضة:** المنتج لسه خشب خام. **زود الحرارة أو الوقت**.")
                 if not success_yield:
-                    st.warning("🔸 **حرق زائد:** إنت حرقت كمية كبيرة من الخشب. **قلل الحرارة أو الوقت** عشان تحافظ على الوزن.")
+                    st.warning("🔸 **حرق زائد:** إنت حرقت كمية كبيرة. **قلل الحرارة أو الوقت**.")
                 if not success_profit:
-                    st.warning("🔸 **خسارة مادية:** تكلفة الطاقة عالية أو كمية الفحم اللي بعتها قليلة. حاول تظبط المعادلة.")
+                    st.warning("🔸 **خسارة مادية:** تكلفة الطاقة عالية. حاول تظبط المعادلة.")
 
         else:
             st.info("👈 قم بتفعيل **'Optimization Mode'** من القائمة الجانبية لبدء اللعبة.")
