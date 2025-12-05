@@ -6,8 +6,9 @@ graphviz
 reportlab
 matplotlib
 fpdf
-kaleido
+kaleido==0.2.1
 scipy
 scikit-learn
+
 
 
