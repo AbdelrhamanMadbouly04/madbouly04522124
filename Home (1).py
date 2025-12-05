@@ -11,6 +11,7 @@ from io import BytesIO
 from reportlab.lib import colors
 from datetime import datetime
 import math
+import streamlit.components.v1 as components # Import components for AI Injection
 
 # --- 1. Constants & Defaults ---
 R_GAS = 8.314
@@ -60,7 +61,7 @@ GLOBAL_CSS = """
 
     /* Sidebar Header - Logo Box Style */
     .header-box {
-        background-color: #2e7d32; /* A lighter green box */
+        background-color: #2e7d32; 
         padding: 15px; 
         border-radius: 8px; 
         text-align: center; 
@@ -145,64 +146,43 @@ def get_time_series(mass_in, moisture_pct, ash_pct_dry, temp_c, time_min, params
         })
     return pd.DataFrame(data)
 
-# --- 4. Professional PDF Generator (With LOGO Simulation) ---
+# --- 4. Professional PDF Generator ---
 def create_pdf(res, profit, fig1, fig2):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter)
     styles = getSampleStyleSheet()
     story = []
     
-    # Theme Color
     CHEMISCO_GREEN = colors.HexColor('#1a3c34')
-    LOGO_BLUE_GREEN = colors.HexColor('#2e7d32') # Matching the Sidebar Header Box
-    
+    LOGO_BLUE_GREEN = colors.HexColor('#2e7d32')
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-    # --- 1. Header with "CHEMISCO BOX" Logo Simulation ---
-    # We create a Table specifically to look like the logo box
+    # Header with Logo
     logo_style = ParagraphStyle(name='LogoText', fontName='Helvetica-Bold', fontSize=18, textColor=colors.white, alignment=1)
     sub_logo_style = ParagraphStyle(name='SubLogo', fontName='Helvetica', fontSize=8, textColor=colors.whitesmoke, alignment=1)
     
-    # The Logo "Box" Content
-    logo_content = [
-        [Paragraph("CHEMISCO", logo_style)],
-        [Paragraph("Torrefaction Simulator", sub_logo_style)]
-    ]
-    
-    # Create the Logo Table
+    logo_content = [[Paragraph("CHEMISCO", logo_style)], [Paragraph("Torrefaction Simulator", sub_logo_style)]]
     t_logo = Table(logo_content, colWidths=[2.5*inch])
     t_logo.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,-1), LOGO_BLUE_GREEN), # The colored box background
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('BOX', (0,0), (-1,-1), 1, colors.white), # White border around text
-        ('TOPPADDING', (0,0), (-1,-1), 6),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
-        ('ROUNDEDCORNERS', [8, 8, 8, 8]) # Attempt rounded corners (supported in newer reportlab) or just standard box
+        ('BACKGROUND', (0,0), (-1,-1), LOGO_BLUE_GREEN),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'), ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('BOX', (0,0), (-1,-1), 1, colors.white), ('TOPPADDING', (0,0), (-1,-1), 6), ('BOTTOMPADDING', (0,0), (-1,-1), 8),
     ]))
 
-    # Info Text (Date)
     info_text = Paragraph(f"<b>Date:</b> {current_time}<br/><b>Status:</b> Success", styles['Normal'])
-
-    # Main Header Table (Logo on Left, Info on Right)
     header_layout = [[t_logo, info_text]]
     t_header_main = Table(header_layout, colWidths=[3*inch, 3*inch])
-    t_header_main.setStyle(TableStyle([
-        ('ALIGN', (0,0), (0,0), 'LEFT'),
-        ('ALIGN', (1,0), (1,0), 'RIGHT'),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-    ]))
+    t_header_main.setStyle(TableStyle([('ALIGN', (0,0), (0,0), 'LEFT'), ('ALIGN', (1,0), (1,0), 'RIGHT'), ('VALIGN', (0,0), (-1,-1), 'MIDDLE')]))
     
     story.append(t_header_main)
     story.append(Spacer(1, 25))
     
-    # --- 2. Report Title ---
+    # Title & Metrics
     story.append(Paragraph("Technical Engineering Report", ParagraphStyle(name='Title', parent=styles['Heading2'], textColor=CHEMISCO_GREEN, fontSize=16)))
     story.append(Spacer(1, 10))
-    story.append(Paragraph("This document summarizes the simulation results for the biomass torrefaction process based on the current input parameters.", styles['Normal']))
+    story.append(Paragraph("This document summarizes the simulation results for the biomass torrefaction process.", styles['Normal']))
     story.append(Spacer(1, 20))
 
-    # --- 3. Key Metrics Table ---
     data = [
         ["Metric", "Value"], 
         ["Mass Yield", f"{res['mass_yield_pct']:.1f} %"], 
@@ -220,30 +200,22 @@ def create_pdf(res, profit, fig1, fig2):
     ]))
     story.append(t); story.append(Spacer(1, 30))
 
-    # --- 4. Charts Integration ---
+    # Charts
     def add_plot(fig, title):
         try:
-            # Force White Background for Print
             fig.update_layout(paper_bgcolor="white", plot_bgcolor="white", font=dict(color="black"))
-            # High-res image generation
             img_bytes = fig.to_image(format="png", width=800, height=450, scale=2)
-            
             story.append(Paragraph(f"<b>{title}</b>", styles['Heading3']))
             story.append(Image(BytesIO(img_bytes), width=6*inch, height=3.5*inch))
             story.append(Spacer(1, 20))
-        except Exception as e:
-            # Fallback if Kaleido fails
-            story.append(Paragraph(f"<font color=red>Error rendering chart: {str(e)}</font>", styles['Normal']))
-            story.append(Paragraph("<i>Please ensure 'kaleido==0.2.1' is installed in requirements.txt</i>", styles['Normal']))
-            story.append(Spacer(1, 10))
+        except Exception:
+            story.append(Paragraph(f"<font color=red>Error rendering chart: {title}. Ensure 'kaleido==0.2.1' is installed.</font>", styles['Normal']))
 
     add_plot(fig1, "Figure 1: Mass Balance Distribution")
     add_plot(fig2, "Figure 2: Solid Composition")
     
-    # --- 5. Footer ---
     story.append(Spacer(1, 30))
-    story.append(Paragraph("<font color=grey size=8>Chemisco Simulator v3.2 | Confidential & Proprietary</font>", styles['Normal']))
-
+    story.append(Paragraph("<font color=grey size=8>Chemisco Simulator v3.3 | Confidential & Proprietary</font>", styles['Normal']))
     doc.build(story)
     buffer.seek(0)
     return buffer
@@ -251,6 +223,30 @@ def create_pdf(res, profit, fig1, fig2):
 # --- 5. Main Streamlit App ---
 def main():
     st.set_page_config(page_title="Chemisco Pro", layout="wide", initial_sidebar_state="expanded")
+    
+    # --- BOTPRESS AI INJECTION START ---
+    # This injects the scripts into the parent window so the chatbot floats correctly
+    botpress_code = """
+    <script>
+      // Function to inject script into parent window
+      const injectBot = () => {
+          const script1 = window.parent.document.createElement('script');
+          script1.src = "https://cdn.botpress.cloud/webchat/v3.4/inject.js";
+          window.parent.document.head.appendChild(script1);
+          
+          script1.onload = () => {
+              const script2 = window.parent.document.createElement('script');
+              script2.src = "https://files.bpcontent.cloud/2025/11/28/23/20251128230307-F5JAD1ML.js";
+              script2.defer = true;
+              window.parent.document.body.appendChild(script2);
+          };
+      };
+      injectBot();
+    </script>
+    """
+    components.html(botpress_code, height=0, width=0)
+    # --- BOTPRESS AI INJECTION END ---
+
     st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
     
     if 'cost_biomass' not in st.session_state: 
@@ -258,7 +254,6 @@ def main():
 
     # Sidebar
     with st.sidebar:
-        # UPDATED: Sidebar Header matching PDF Logo Logic
         st.markdown("""
             <div class="header-box">
                 <h1>CHEMISCO</h1>
