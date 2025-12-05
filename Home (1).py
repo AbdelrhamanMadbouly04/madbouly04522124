@@ -10,27 +10,6 @@ from io import BytesIO
 from reportlab.lib import colors
 import streamlit.components.v1 as components
 import math
-import os
-
-# --- 0. Disable Developer Hotkeys & Menu ---
-def kill_developer_hotkeys():
-    if not os.path.exists(".streamlit"):
-        os.makedirs(".streamlit")
-    
-    config_content = """
-[client]
-toolbarMode = "viewer"
-showErrorDetails = false
-[ui]
-hideTopBar = true
-"""
-    try:
-        with open(".streamlit/config.toml", "w") as f:
-            f.write(config_content)
-    except:
-        pass
-
-kill_developer_hotkeys()
 
 # --- 1. Constants & Defaults ---
 R_GAS = 8.314
@@ -83,43 +62,41 @@ GLOBAL_CSS = """
     
     .streamlit-expanderHeader { color: #ffffff !important; background-color: #4a090e !important; border-radius: 5px; }
 
-    /* --- FIX: Removed 'header' from hidden list so toggle button works --- */
+    /* Hide Hamburger Menu & Footer only - Header stays visible for sidebar toggle */
     #MainMenu, footer, .stDeployButton {visibility: hidden;}
 </style>
 """
 
-# --- 3. Mathematical Models (New Logic) ---
+# --- 3. Mathematical Models (Corrected Logic) ---
 
 def moisture_evap_linear(initial_moisture_kg, T_C, t_min, k_f=0.02):
     """(A) Linear moisture evaporation model (starts > 100°C)"""
     if T_C <= 100:
         return 0.0
-    # Rate proportional to temperature excess above 100C
     evap_kg = k_f * (T_C - 100) * t_min * initial_moisture_kg
     return min(initial_moisture_kg, max(0.0, evap_kg))
 
 def Y_solid_empirical(T_C, t_min, a=0.35, b=0.004):
-    """(C) Empirical solid yield loss model based on severity"""
+    """(C) Empirical solid yield loss model"""
     severity = max(0.0, T_C - 200) * t_min
     expo = math.exp(-b * severity)
     return 1.0 - a * (1.0 - expo)
 
 def m_oil(dry_mass_kg, T_C, t_min, C_oil=0.25):
-    """(D) Bio-oil production (Exponential approach)"""
+    """(D) Bio-oil production"""
     k_oil = 0.0008 * max(0.0, T_C - 200)
     return dry_mass_kg * C_oil * (1.0 - math.exp(-k_oil * t_min))
 
 def m_gas(dry_mass_kg, T_C, t_min, C_gas=0.20):
-    """(D) Gas production (Exponential approach)"""
+    """(D) Gas production"""
     k_gas = 0.0015 * max(0.0, T_C - 180)
     return dry_mass_kg * C_gas * (1.0 - math.exp(-k_gas * t_min))
 
 def hh_increase_fraction(Y_solid):
-    """(F) HHV increase based on solid yield"""
+    """(F) HHV increase"""
     return 0.25 * (1.0 - Y_solid)
 
 def run_simulation(mass_in, moisture_pct, ash_pct_dry, temp_c, time_min, params):
-    # Prepare Inputs
     moisture_frac = moisture_pct / 100.0
     ash_frac_dry = ash_pct_dry / 100.0
     
@@ -127,23 +104,18 @@ def run_simulation(mass_in, moisture_pct, ash_pct_dry, temp_c, time_min, params)
     M0_dry = mass_in * (1.0 - moisture_frac)
     M_ash = M0_dry * ash_frac_dry
     
-    # 1. Water Evaporation
+    # Calculations
     w_evap = moisture_evap_linear(M0_water, temp_c, time_min, k_f=params['k_f'])
     w_remaining = M0_water - w_evap
     
-    # 2. Volatiles (Oil & Gas) from Dry Mass
     oil_kg = m_oil(M0_dry, temp_c, time_min, C_oil=params['C_oil'])
     gas_kg = m_gas(M0_dry, temp_c, time_min, C_gas=params['C_gas'])
     
-    # 3. Char Calculation (Mass Balance)
-    # Total Mass Out = Char_Total + Oil + Gas + Water_Evap
-    # Char_Total includes Ash and remaining moisture (if any)
-    # Ideally: Char_Dry_Organic = M0_dry - Oil - Gas
+    # Mass Balance
     char_dry = max(0, M0_dry - oil_kg - gas_kg) 
     char_total_mass = char_dry + w_remaining
     
-    # 4. Energy Calculations
-    # Use empirical yield for HHV estimation
+    # Energy
     y_solid_val = Y_solid_empirical(temp_c, time_min, a=params['a_solid'], b=params['b_solid'])
     hhv_inc_frac = hh_increase_fraction(y_solid_val)
     hhv_final = HHV_DRY_INITIAL_DEFAULT * (1.0 + hhv_inc_frac)
@@ -152,14 +124,14 @@ def run_simulation(mass_in, moisture_pct, ash_pct_dry, temp_c, time_min, params)
     energy_out = char_dry * hhv_final
     energy_yield = (energy_out / energy_in) * 100 if energy_in > 0 else 0
     
-    # 5. Thermal Requirements Estimate
+    # Thermal Load
     T_K = temp_c + 273.15
-    Q_sensible_bio = (M0_dry * CP_BIOMASS * (T_K - TEMP_REF_K)) / 1000 # kJ
-    Q_sensible_water = (M0_water * CP_WATER * (373.15 - TEMP_REF_K)) / 1000 # to 100C
-    Q_latent = (w_evap * H_VAPOR) / 1000 # kJ
+    Q_sensible_bio = (M0_dry * CP_BIOMASS * (T_K - TEMP_REF_K)) / 1000 
+    Q_sensible_water = (M0_water * CP_WATER * (373.15 - TEMP_REF_K)) / 1000 
+    Q_latent = (w_evap * H_VAPOR) / 1000 
     Q_total_kJ = Q_sensible_bio + Q_sensible_water + Q_latent
     
-    results = {
+    return {
         "mass_in": mass_in,
         "char_kg": char_total_mass,
         "water_evap_kg": w_evap,
@@ -173,7 +145,6 @@ def run_simulation(mass_in, moisture_pct, ash_pct_dry, temp_c, time_min, params)
         "Q_total_kJ": Q_total_kJ,
         "params": params
     }
-    return results
 
 def get_time_series(mass_in, moisture_pct, ash_pct_dry, temp_c, time_min, params):
     times = np.linspace(0, time_min, 50)
@@ -217,9 +188,10 @@ def main():
     st.set_page_config(page_title="Chemisco Pro", layout="wide", initial_sidebar_state="expanded")
     st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
     
-    # Botpress Inject
-    js_code = """<script>if(!window.parent.document.getElementById('botpress-inject')){var s=window.parent.document.createElement('script');s.id='botpress-inject';s.src='https://cdn.botpress.cloud/webchat/v3.4/inject.js';window.parent.document.head.appendChild(s);s.onload=function(){var s2=window.parent.document.createElement('script');s2.src='https://files.bpcontent.cloud/2025/11/28/23/20251128230307-F5JAD1ML.js';s2.defer=true;window.parent.document.body.appendChild(s2);}}</script>"""
-    components.html(js_code, height=0, width=0)
+    # --- OPTIONAL: Botpress Inject (Commented out to prevent loading lag) ---
+    # Uncomment lines below if you need the chatbot back
+    # js_code = """<script>if(!window.parent.document.getElementById('botpress-inject')){var s=window.parent.document.createElement('script');s.id='botpress-inject';s.src='https://cdn.botpress.cloud/webchat/v3.4/inject.js';window.parent.document.head.appendChild(s);s.onload=function(){var s2=window.parent.document.createElement('script');s2.src='https://files.bpcontent.cloud/2025/11/28/23/20251128230307-F5JAD1ML.js';s2.defer=true;window.parent.document.body.appendChild(s2);}}</script>"""
+    # components.html(js_code, height=0, width=0)
 
     if 'cost_biomass' not in st.session_state: 
         st.session_state.update({'cost_biomass': 30.0, 'cost_energy': 0.15, 'price_char': 1.20})
@@ -240,7 +212,6 @@ def main():
             time_min = st.slider("Time (min)", 10, 120, 30)
 
         with st.expander("🔧 Advanced Model Params", expanded=False):
-            st.markdown("Change kinetics constants:")
             p_kf = st.number_input("Drying rate (k_f)", 0.0, 0.1, 0.02, format="%.3f")
             p_Coil = st.number_input("Max Oil frac (C_oil)", 0.0, 0.5, 0.25)
             p_Cgas = st.number_input("Max Gas frac (C_gas)", 0.0, 0.5, 0.20)
@@ -309,7 +280,6 @@ def main():
             
         with cc2:
             st.subheader("Solid Composition")
-            # Char vs Ash
             organic_char = res['char_kg'] - res['ash_kg']
             df_bar = pd.DataFrame({
                 "Type": ["Organic Carbon", "Ash"],
@@ -323,7 +293,6 @@ def main():
         st.subheader("Process Kinetics (Simulation)")
         df_time = get_time_series(mass, moisture, ash, temp, time_min, params)
         
-        # Stacked Area Chart for Mass
         fig_area = go.Figure()
         fig_area.add_trace(go.Scatter(x=df_time['Time (min)'], y=df_time['Char (kg)'], stackgroup='one', name='Char', line=dict(width=0, color='#2ecc71')))
         fig_area.add_trace(go.Scatter(x=df_time['Time (min)'], y=df_time['Bio-Oil (kg)'], stackgroup='one', name='Bio-Oil', line=dict(width=0, color='#e67e22')))
@@ -332,7 +301,6 @@ def main():
         fig_area.update_layout(paper_bgcolor=plot_bg, plot_bgcolor=plot_bg, font_color=txt_col, title="Product Evolution Over Time", xaxis_title="Time (min)", yaxis_title="Mass (kg)")
         st.plotly_chart(fig_area, use_container_width=True)
         
-        # Line chart for HHV
         fig_hhv = px.line(df_time, x="Time (min)", y="HHV Increase (%)", title="Energy Density Increase")
         fig_hhv.update_traces(line_color="#d97584")
         fig_hhv.update_layout(paper_bgcolor=plot_bg, plot_bgcolor=plot_bg, font_color=txt_col)
