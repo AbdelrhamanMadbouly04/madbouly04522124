@@ -8,7 +8,6 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet
 from io import BytesIO
 from reportlab.lib import colors
-import streamlit.components.v1 as components
 import math
 
 # --- 1. Constants & Defaults ---
@@ -19,91 +18,115 @@ H_VAPOR = 2260000.0  # J/kg (Latent heat)
 TEMP_REF_K = 298.15
 HHV_DRY_INITIAL_DEFAULT = 18.0 # MJ/kg
 
-# --- 2. Styles (High Contrast: Green/Gray/Black) ---
+# --- 2. Styles (Professional Bio-Tech Theme) ---
 GLOBAL_CSS = """
 <style>
-    /* 1. Main Background & Text */
-    .stApp { background-color: #e9e9e9; color: #000000; font-family: 'Segoe UI', sans-serif; }
-    
-    /* 2. Headings (H1-H6) -> Forest Green */
-    h1, h2, h3, h4, h5, h6 { color: #00743c !important; }
-    
-    /* 3. General Paragraphs & Labels -> Pure Black */
-    .stMarkdown, p, label, li, span, div { color: #000000 !important; }
-    
-    /* 4. Sidebar Styles */
-    section[data-testid="stSidebar"] { 
-        background-color: #e8f5e9; /* Very Light Green */
-        border-right: 2px solid #00743c; 
+    /* 1. Main Application Background - Soft Blue-Grey (Dashboard Standard) */
+    .stApp {
+        background-color: #f4f6f9; 
+        font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     }
-    /* Force Sidebar Text to Black */
-    section[data-testid="stSidebar"] * { color: #000000 !important; }
+
+    /* 2. Sidebar - Professional Dark Teal/Green */
+    section[data-testid="stSidebar"] {
+        background-color: #1a3c34; /* Deep Professional Green */
+        color: #ffffff;
+    }
+    
+    /* Force Sidebar Text Colors to White/Light Gray */
     section[data-testid="stSidebar"] h1, 
-    section[data-testid="stSidebar"] h2 { color: #00743c !important; }
-    
-    /* 5. Inputs (Sliders & Selectboxes) */
-    .stSlider > div > div > div > div { background-color: #00743c !important; }
-    div[data-baseweb="select"] > div { 
-        background-color: #ffffff !important; 
-        color: #000000 !important; 
-        border: 1px solid #cccccc;
+    section[data-testid="stSidebar"] h2, 
+    section[data-testid="stSidebar"] h3, 
+    section[data-testid="stSidebar"] label {
+        color: #e0f2f1 !important; /* Very light teal text */
+    }
+    section[data-testid="stSidebar"] p, 
+    section[data-testid="stSidebar"] li, 
+    section[data-testid="stSidebar"] .stMarkdown {
+        color: #b2dfdb !important; /* Muted teal text */
+    }
+
+    /* 3. Main Content Headings - Dark Slate */
+    h1, h2, h3, h4 {
+        color: #263238 !important; /* Dark Slate Blue/Grey */
+        font-weight: 700;
     }
     
-    /* 6. Metrics (The Cards like "20.20 MJ/kg") */
+    /* 4. General Text - Dark Grey (Readability) */
+    .stMarkdown, p, div, span, li {
+        color: #37474f; 
+    }
+
+    /* 5. Metrics Cards - Clean White with Color Accent */
     div[data-testid="stMetric"] {
-        background-color: #ffffff !important; /* Force White Background */
-        border: 2px solid #00743c;
-        border-radius: 8px; padding: 10px; 
-        box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+        background-color: #ffffff !important;
+        border: 1px solid #e0e0e0;
+        border-left: 5px solid #1a3c34; /* Matching Sidebar Green */
+        border-radius: 8px;
+        padding: 15px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
-    div[data-testid="stMetricValue"] { color: #000000 !important; font-weight: bold; } /* The Number */
-    div[data-testid="stMetricLabel"] { color: #00743c !important; font-weight: bold; } /* The Title */
-    div[data-testid="stMetricDelta"] svg { fill: #000000 !important; } /* Arrow Icon */
-    div[data-testid="stMetricDelta"] > div { color: #333333 !important; } /* Delta Text */
-
-    /* 7. Header Box (Top of Sidebar) */
-    .header-box {
-        background: #ffffff; 
-        border: 2px solid #00743c; 
-        padding: 20px;
-        border-radius: 10px; text-align: center;
-        margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    }
-    .header-box h1 { color: #00743c !important; margin: 0; }
-    .header-box p { color: #000000 !important; margin: 0; }
-
-    /* 8. Tabs */
-    div[data-testid="stTabs"] button { color: #333333 !important; font-weight: bold; }
-    div[data-testid="stTabs"] button[aria-selected="true"] { color: #00743c !important; border-bottom: 3px solid #00743c !important; }
-    
-    /* 9. Buttons */
-    .stButton > button { 
-        background-color: #ffffff !important; 
-        color: #000000 !important; 
-        border: 2px solid #00743c; 
-        border-radius: 6px; 
+    div[data-testid="stMetricValue"] {
+        color: #1a3c34 !important; /* Main Value in Brand Color */
         font-weight: bold;
     }
-    .stButton > button:hover { 
-        background-color: #00743c !important; 
-        color: #ffffff !important;
+    div[data-testid="stMetricLabel"] {
+        color: #546e7a !important; /* Label in Slate Grey */
+        font-weight: 600;
     }
 
-    /* 10. Flow Visualization Blocks */
-    .bfd-block {
-        padding: 10px; border-radius: 8px; text-align: center; 
-        background: #ffffff; 
-        border: 2px solid #00743c; 
-        color: #000000; font-weight: bold; font-size: 0.9em;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    /* 6. Header Box in Sidebar */
+    .header-box {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 20px;
+        border-radius: 8px;
+        text-align: center;
+        margin-bottom: 25px;
     }
-    .bfd-stream { color: #00743c; font-size: 20px; padding-top: 10px; text-align: center; font-weight: bold; }
+    .header-box h1 { color: #ffffff !important; margin: 0; font-size: 1.8rem; letter-spacing: 1px; }
+    .header-box p { color: #80cbc4 !important; margin: 0; font-size: 0.9rem; }
+
+    /* 7. Buttons & Inputs */
+    .stButton > button {
+        background-color: #1a3c34 !important;
+        color: white !important;
+        border: none;
+        border-radius: 4px;
+        padding: 0.5rem 1rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    .stButton > button:hover {
+        background-color: #2e695b !important;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
     
-    /* 11. Expander */
-    .streamlit-expanderHeader { 
-        color: #000000 !important; 
-        background-color: #ffffff !important; 
-        border: 1px solid #cccccc; 
+    /* Input Fields Backgrounds */
+    .stSlider > div > div > div > div { background-color: #26a69a !important; }
+    div[data-baseweb="select"] > div { background-color: #ffffff !important; color: #333 !important; }
+
+    /* 8. Flow Blocks (BFD) */
+    .bfd-block {
+        padding: 15px;
+        border-radius: 8px;
+        text-align: center;
+        background: #ffffff;
+        border: 1px solid #cfd8dc;
+        color: #37474f;
+        font-weight: bold;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+    .bfd-stream { color: #1a3c34; font-size: 24px; padding-top: 10px; font-weight: bold; }
+
+    /* 9. Tabs */
+    div[data-testid="stTabs"] button {
+        color: #546e7a;
+        font-weight: 600;
+    }
+    div[data-testid="stTabs"] button[aria-selected="true"] {
+        color: #1a3c34 !important;
+        border-bottom: 3px solid #1a3c34 !important;
     }
 
     /* Hide Hamburger Menu & Footer */
@@ -216,9 +239,10 @@ def create_pdf(res, profit):
         ["Profit Est.", f"${profit:.2f}"]
     ]
     t = Table(data, colWidths=[200, 200])
-    t.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor('#a5d6a7')), 
-                           ('TEXTCOLOR', (0,0), (-1,0), colors.black), 
-                           ('GRID', (0,0), (-1,-1), 1, colors.black),
+    # Updated PDF colors to match theme (Deep Teal Header)
+    t.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1a3c34')), 
+                           ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke), 
+                           ('GRID', (0,0), (-1,-1), 1, colors.grey),
                            ('TEXTCOLOR', (0,1), (-1,-1), colors.black)]))
     story.append(t)
     doc.build(story)
@@ -235,20 +259,20 @@ def main():
 
     # --- Sidebar ---
     with st.sidebar:
-        st.markdown("""<div class="header-box"><h1>CHEMISCO</h1><p>Torrefaction Simulator</p></div>""", unsafe_allow_html=True)
-        st.header("⚙️ Inputs")
+        st.markdown("""<div class="header-box"><h1>CHEMISCO</h1><p>PRO SIMULATOR</p></div>""", unsafe_allow_html=True)
+        st.header("⚙️ Simulation Inputs")
         reactor = st.selectbox("Reactor Type", ["Rotary Drum", "Fluidized Bed", "Screw Reactor"])
         
-        with st.expander("🌲 Feedstock", expanded=True):
+        with st.expander("🌲 Feedstock Properties", expanded=True):
             mass = st.number_input("Mass (kg)", 1.0, 10000.0, 100.0, 10.0)
             moisture = st.slider("Moisture (%)", 0.0, 60.0, 15.0)
             ash = st.slider("Ash (Dry Basis %)", 0.0, 30.0, 5.0)
             
-        with st.expander("🔥 Process", expanded=True):
+        with st.expander("🔥 Process Conditions", expanded=True):
             temp = st.slider("Temp (°C)", 150, 350, 275)
             time_min = st.slider("Time (min)", 10, 120, 30)
 
-        with st.expander("🔧 Advanced Model Params", expanded=False):
+        with st.expander("🔧 Model Constants", expanded=False):
             p_kf = st.number_input("Drying rate (k_f)", 0.0, 0.1, 0.02, format="%.3f")
             p_Coil = st.number_input("Max Oil frac (C_oil)", 0.0, 0.5, 0.25)
             p_Cgas = st.number_input("Max Gas frac (C_gas)", 0.0, 0.5, 0.20)
@@ -259,12 +283,12 @@ def main():
             
         params = {"k_f": p_kf, "C_oil": p_Coil, "C_gas": p_Cgas, "a_solid": p_a, "b_solid": p_b, "energy_factor": p_enh}
 
-        with st.expander("💰 Economics", expanded=False):
+        with st.expander("💰 Economic Factors", expanded=False):
             st.session_state.cost_biomass = st.number_input("Feed ($/ton)", value=st.session_state.cost_biomass)
             st.session_state.cost_energy = st.number_input("Energy ($/kWh)", value=st.session_state.cost_energy)
             st.session_state.price_char = st.number_input("Char Price ($/kg)", value=st.session_state.price_char)
         
-        game_mode = st.checkbox("🎮 Optimization Mode")
+        game_mode = st.checkbox("🎮 Optimization Challenge")
 
     # --- Calculations ---
     res = run_simulation(mass, moisture, ash, temp, time_min, params)
@@ -277,7 +301,7 @@ def main():
     profit = revenue - (cost_feed + cost_ops)
 
     # --- Dashboard View ---
-    st.title("CHEMISCO: Advanced Dashboard")
+    st.title("CHEMISCO: Process Dashboard")
     st.markdown("---")
     
     # Flow Visualization
@@ -299,12 +323,12 @@ def main():
     st.markdown("---")
 
     # --- Tabs ---
-    t1, t2, t3, t4 = st.tabs(["📊 Charts", "📈 Time Analysis", "📄 Report", "🎮 Game"])
+    t1, t2, t3, t4 = st.tabs(["📊 Analytics", "📈 Kinetics", "📄 Export", "🎯 Challenge"])
     
-    # --- CHART STYLING FIXES ---
-    plot_bg = '#e9e9e9' # Match app background
-    txt_col = '#000000' # Force Black Text
-    colors_seq = ["#00743c", "#3498db", "#e67e22", "#e74c3c"] 
+    # Theme Colors for Charts
+    plot_bg = '#f4f6f9'  # Match App Background
+    txt_col = '#37474f'  # Dark Slate
+    colors_seq = ["#1a3c34", "#5c6bc0", "#ffa726", "#ef5350"] # Green, Indigo, Orange, Red
     
     with t1:
         cc1, cc2 = st.columns(2)
@@ -314,12 +338,11 @@ def main():
                 "Component": ["Biochar", "Water Vapor", "Bio-Oil", "Gases"],
                 "Mass (kg)": [res['char_kg'], res['water_evap_kg'], res['oil_kg'], res['gas_kg']]
             })
-            fig = px.pie(df_pie, values='Mass (kg)', names='Component', hole=0.4, color_discrete_sequence=colors_seq)
-            # FORCE BLACK TEXT ON CHARTS
+            fig = px.pie(df_pie, values='Mass (kg)', names='Component', hole=0.5, color_discrete_sequence=colors_seq)
             fig.update_layout(
                 paper_bgcolor=plot_bg, 
                 plot_bgcolor=plot_bg, 
-                font=dict(color=txt_col, size=14),
+                font=dict(color=txt_col, size=13),
                 legend=dict(font=dict(color=txt_col))
             )
             st.plotly_chart(fig, use_container_width=True)
@@ -331,12 +354,11 @@ def main():
                 "Type": ["Organic Carbon", "Ash"],
                 "Mass (kg)": [organic_char, res['ash_kg']]
             })
-            fig2 = px.bar(df_bar, x='Type', y='Mass (kg)', color='Type', color_discrete_sequence=['#00743c', '#7f8c8d'])
-            # FORCE BLACK TEXT ON CHARTS
+            fig2 = px.bar(df_bar, x='Type', y='Mass (kg)', color='Type', color_discrete_sequence=['#1a3c34', '#b0bec5'])
             fig2.update_layout(
                 paper_bgcolor=plot_bg, 
                 plot_bgcolor=plot_bg, 
-                font=dict(color=txt_col, size=14),
+                font=dict(color=txt_col, size=13),
                 xaxis=dict(title_font=dict(color=txt_col), tickfont=dict(color=txt_col)),
                 yaxis=dict(title_font=dict(color=txt_col), tickfont=dict(color=txt_col)),
                 showlegend=False
@@ -348,49 +370,47 @@ def main():
         df_time = get_time_series(mass, moisture, ash, temp, time_min, params)
         
         fig_area = go.Figure()
-        fig_area.add_trace(go.Scatter(x=df_time['Time (min)'], y=df_time['Char (kg)'], stackgroup='one', name='Char', line=dict(width=0, color='#00743c')))
-        fig_area.add_trace(go.Scatter(x=df_time['Time (min)'], y=df_time['Bio-Oil (kg)'], stackgroup='one', name='Bio-Oil', line=dict(width=0, color='#e67e22')))
-        fig_area.add_trace(go.Scatter(x=df_time['Time (min)'], y=df_time['Gases (kg)'], stackgroup='one', name='Gases', line=dict(width=0, color='#e74c3c')))
-        fig_area.add_trace(go.Scatter(x=df_time['Time (min)'], y=df_time['Water Vapor (kg)'], stackgroup='one', name='Water Vapor', line=dict(width=0, color='#3498db')))
+        fig_area.add_trace(go.Scatter(x=df_time['Time (min)'], y=df_time['Char (kg)'], stackgroup='one', name='Char', line=dict(width=0, color='#1a3c34')))
+        fig_area.add_trace(go.Scatter(x=df_time['Time (min)'], y=df_time['Bio-Oil (kg)'], stackgroup='one', name='Bio-Oil', line=dict(width=0, color='#ffa726')))
+        fig_area.add_trace(go.Scatter(x=df_time['Time (min)'], y=df_time['Gases (kg)'], stackgroup='one', name='Gases', line=dict(width=0, color='#ef5350')))
+        fig_area.add_trace(go.Scatter(x=df_time['Time (min)'], y=df_time['Water Vapor (kg)'], stackgroup='one', name='Water Vapor', line=dict(width=0, color='#5c6bc0')))
         
-        # FORCE BLACK TEXT ON AREA CHART
         fig_area.update_layout(
             paper_bgcolor=plot_bg, 
             plot_bgcolor=plot_bg, 
             font=dict(color=txt_col),
             title="Product Evolution Over Time", 
-            xaxis=dict(title="Time (min)", title_font=dict(color=txt_col), tickfont=dict(color=txt_col)), 
-            yaxis=dict(title="Mass (kg)", title_font=dict(color=txt_col), tickfont=dict(color=txt_col)),
+            xaxis=dict(title="Time (min)", title_font=dict(color=txt_col), tickfont=dict(color=txt_col), gridcolor='#e0e0e0'), 
+            yaxis=dict(title="Mass (kg)", title_font=dict(color=txt_col), tickfont=dict(color=txt_col), gridcolor='#e0e0e0'),
             legend=dict(font=dict(color=txt_col))
         )
         st.plotly_chart(fig_area, use_container_width=True)
         
         fig_hhv = px.line(df_time, x="Time (min)", y="HHV Increase (%)", title="Energy Density Increase")
-        fig_hhv.update_traces(line_color="#d97584")
-        # FORCE BLACK TEXT ON LINE CHART
+        fig_hhv.update_traces(line_color="#e91e63", line_width=3)
         fig_hhv.update_layout(
             paper_bgcolor=plot_bg, 
             plot_bgcolor=plot_bg, 
             font=dict(color=txt_col),
-            xaxis=dict(title_font=dict(color=txt_col), tickfont=dict(color=txt_col)), 
-            yaxis=dict(title_font=dict(color=txt_col), tickfont=dict(color=txt_col))
+            xaxis=dict(title_font=dict(color=txt_col), tickfont=dict(color=txt_col), gridcolor='#e0e0e0'), 
+            yaxis=dict(title_font=dict(color=txt_col), tickfont=dict(color=txt_col), gridcolor='#e0e0e0')
         )
         st.plotly_chart(fig_hhv, use_container_width=True)
 
     with t3:
-        st.write("Generate official technical PDF report.")
+        st.markdown("### 📄 Technical Report Generation")
+        st.write("Click below to generate a formal engineering report for the current simulation parameters.")
         pdf = create_pdf(res, profit)
-        st.download_button("Download Report PDF", pdf, "chemisco_report.pdf", "application/pdf")
+        st.download_button("Download PDF Report", pdf, "chemisco_report.pdf", "application/pdf")
 
     with t4:
         if game_mode:
-            st.markdown("### 🎯 Engineering Challenge: Find the Sweet Spot")
+            st.markdown("### 🎯 Engineering Challenge: The Sweet Spot")
             st.markdown("""
-            **مهمتك كمهندس:** المستثمر عايز منتج مواصفاته عالية (Bio-Coal) وفي نفس الوقت يحقق ربح.
-            عشان تكسب لازم تحقق الـ 3 شروط دول في نفس الوقت:
-            1.  **الجودة:** كثافة الطاقة (HHV) لازم تكون **أعلى من 22.0 MJ/kg**.
-            2.  **الإنتاجية:** صافي الوزن (Yield) لازم يكون **أعلى من 55%**.
-            3.  **الاقتصاد:** لازم تحقق **صافي ربح موجب (> $0)**.
+            **Target Specifications:**
+            1.  **HHV:** > 22.0 MJ/kg
+            2.  **Yield:** > 55.0%
+            3.  **Profit:** Positive (> $0)
             """)
             
             st.markdown("---")
@@ -424,21 +444,21 @@ def main():
 
             if success_hhv and success_yield and success_profit:
                 st.balloons()
-                st.success("🏆 **مبــــروك! لقد وجدت التوازن المثالي (The Sweet Spot)**")
+                st.success("🏆 **OUTSTANDING ENGINEERING! You found the Sweet Spot.**")
                 score = (res['hhv_final'] * res['mass_yield_pct']) + profit
                 st.metric("🌟 Engineering Score", f"{int(score)}")
             else:
-                st.error("❌ **محاولة غير ناجحة.. جرب تاني!**")
-                st.markdown("#### 💡 نصائح المهندس الاستشاري:")
+                st.error("❌ **Optimization Failed.**")
+                st.markdown("#### 💡 Consultant Feedback:")
                 if not success_hhv:
-                    st.warning("🔸 **جودة منخفضة:** المنتج لسه خشب خام. **زود الحرارة أو الوقت**.")
+                    st.warning("🔸 **Low Quality:** The product is still raw. **Increase Temperature or Time**.")
                 if not success_yield:
-                    st.warning("🔸 **حرق زائد:** إنت حرقت كمية كبيرة. **قلل الحرارة أو الوقت**.")
+                    st.warning("🔸 **Over-Torrefaction:** You are burning too much mass. **Reduce Temperature**.")
                 if not success_profit:
-                    st.warning("🔸 **خسارة مادية:** تكلفة الطاقة عالية. حاول تظبط المعادلة.")
+                    st.warning("🔸 **Financial Loss:** Energy costs are too high. Check your efficiency.")
 
         else:
-            st.info("👈 قم بتفعيل **'Optimization Mode'** من القائمة الجانبية لبدء اللعبة.")
+            st.info("👈 Enable **'Optimization Challenge'** in the sidebar to start the game.")
 
 if __name__ == "__main__":
     main()
